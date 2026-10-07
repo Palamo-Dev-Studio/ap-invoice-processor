@@ -54,11 +54,13 @@ with `-l eng`. Do not quote numbers from a fixture run as AI accuracy anywhere.
 ## Negative controls
 
 The tests generate, in a temporary directory, a blank fixture set (all-null and all-empty), a perturbed set (every
-value changed; GL always a wrong account), a shifted set (each document gets another document's fixtures) and an
-oracle set (copied from ground truth). Blank and perturbed must score at or below 0.05 on extraction and GL; the
-real fixtures must score strictly higher than every control, and the oracle must reach 1.0. This shows the scorer
-tells good from bad, which is all a fixture run can show. Shifted fixtures are only required to score well below the
-real ones, since documents share currencies, quantities and chart accounts.
+value changed; GL always a wrong account), a shifted set (each document gets the fixtures of another invoice, never
+a pdf/scan/photo variant of its own) and an oracle set (copied from ground truth). Blank and perturbed must score at
+or below 0.05 on extraction and GL; the real fixtures must score strictly higher than every control, and the oracle
+must reach 1.0. This shows the scorer tells good from bad, which is all a fixture run can show. Shifted fixtures
+must score below a quarter of the real extraction rate and below half of the real GL rate: with a donor from a
+different invoice, what remains is coincidence (shared currencies, quantities, chart accounts). A donor that is a
+variant of the same invoice would score high for a different reason, so the donor is chosen to avoid that.
 
 ## Live provider (later)
 

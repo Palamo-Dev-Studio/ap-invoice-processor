@@ -128,10 +128,18 @@ def _build_perturbed(tmp_path):
     return d
 
 
+def _base_id(doc_id):
+    return re.sub(r"-(scan|photo)$", "", doc_id)
+
+
 def _build_shifted(tmp_path):
+    """Each document gets the fixtures of the next document that is not a variant of the same invoice."""
     d = _fresh_copy(tmp_path)
     for k, doc_id in enumerate(DOC_IDS):
-        donor = DOC_IDS[(k + 1) % len(DOC_IDS)]
+        step = 1
+        while _base_id(DOC_IDS[(k + step) % len(DOC_IDS)]) == _base_id(doc_id):
+            step += 1
+        donor = DOC_IDS[(k + step) % len(DOC_IDS)]
         for task in ("extract", "gl"):
             _write(os.path.join(d, task, f"{doc_id}.json"), _read(os.path.join(FIXTURE_LLM, task, f"{donor}.json")))
     return d
@@ -173,6 +181,8 @@ def test_strict_and_lenient_columns_are_reported_separately():
     assert sc.fields_match("vendor_name", "Papeleria El Roble", "Papelería El Roble") == (False, True)
     assert sc.fields_match("vendor_name", "papelería  el roble", "Papelería El Roble") == (True, True)
     assert sc.fields_match("vendor_name", None, "X") == (False, False)
+    # Line descriptions follow the same rule: strict keeps accents, only the lenient column folds them.
+    assert sc.fields_match("description", "Papeleria", "Papelería") == (False, True)
 
 
 def test_amounts_compare_to_the_cent_not_as_floats():
@@ -255,6 +265,29 @@ def test_gl_null_label_is_unscorable_and_missing_line_is_counted():
     assert sc.aggregate([empty])["overall"]["gl"]["no_line"] == 1
 
 
+def test_gl_codes_are_scored_against_their_own_paired_line_and_extra_lines_are_counted():
+    # Extracted order is reversed relative to ground truth and every line has a different account, so a lookup by
+    # ground-truth index instead of by the paired extracted index scores the wrong code against each label.
+    truth = {
+        **_GT,
+        "line_items": [
+            {"description": "Alpha", "quantity": 1, "unit_price": 1, "amount": 1},
+            {"description": "Beta", "quantity": 1, "unit_price": 1, "amount": 1},
+            {"description": "Gamma", "quantity": 1, "unit_price": 1, "amount": 1},
+        ],
+    }
+    extracted = [_line("Gamma"), _line("Beta"), _line("Alpha"), _line("Extra")]
+    codes = [GLCode(account=a, account_name="x", confidence=0.9, reason="r", source="llm") for a in ("6300", "6200", "6100", "6400")]
+    res = _result(gl_codes=codes)
+    res.extraction = res.extraction.model_copy(update={"line_items": extracted})
+    labels = [{"line": 0, "account": "6100"}, {"line": 1, "account": "6200"}, {"line": 2, "account": "6300"}]
+    doc = sc.score_document(res, truth, labels)
+    assert [(r["line"], r["status"]) for r in doc["gl"]] == [(0, "correct"), (1, "correct"), (2, "correct")]
+    assert [line["extracted_line"] for line in doc["lines"]] == [2, 1, 0]
+    assert doc["extra_extracted_lines"] == 1
+    assert sc.aggregate([doc])["overall"]["line_counts"] == {"truth": 3, "extra": 1}
+
+
 # --- end to end over the corpus with the real fixtures -----------------------------------------------------------
 
 
@@ -308,7 +341,10 @@ def test_extraction_failure_is_scored_as_misses_and_listed(tmp_path):
     d = _fresh_copy(tmp_path)
     os.remove(os.path.join(d, "extract", "en-001.json"))
     scored = _eval(d)
-    assert scored["summary"]["overall"]["extraction_errors"] == 1
+    overall = scored["summary"]["overall"]
+    assert overall["extraction_errors"] == 1
+    # The failed document stays in every denominator: its cells count as misses, they are not dropped.
+    assert overall[sc.ALL_HEADER]["n"] == 329 and overall[sc.ALL_LINE]["n"] == 392
     assert "Failed documents" in ee.render_report(scored) and "en-001" in ee.render_report(scored)
 
 
@@ -465,7 +501,10 @@ def test_blank_fixtures_with_null_total_fail_every_document_and_score_zero(tmp_p
     assert overall["extraction_errors"] == 40
     strict, lenient, gl = _rates(scored)
     assert strict <= CONTROL_CEILING and lenient <= CONTROL_CEILING and gl <= CONTROL_CEILING
-    assert overall["gl"]["no_line"] == 56
+    # Every document failed, yet every scorable cell and label stays in its denominator, so the rates are real zeros.
+    assert overall[sc.ALL_HEADER]["n"] == 329 and overall[sc.ALL_LINE]["n"] == 392
+    assert overall["gl"]["no_line"] == 56 and overall["gl"]["scorable"] == 56
+    assert gl == 0.0
 
 
 def test_blank_fixtures_with_empty_values_score_at_or_near_zero(tmp_path):
@@ -496,9 +535,9 @@ def test_shifted_fixtures_score_well_below_the_real_ones(tmp_path, real):
     scored = _eval(_build_shifted(tmp_path))
     strict, _, gl = _rates(scored)
     real_strict, _, real_gl = _rates(real)
-    # Documents share currencies, quantities and chart accounts, so a shifted set is allowed some coincidental hits.
-    assert strict < real_strict / 2
-    assert gl < real_gl
+    # The donor is never a variant of the recipient's own invoice, so what survives is coincidence only.
+    assert strict < real_strict / 4
+    assert gl < real_gl / 2
 
 
 def test_real_fixtures_score_strictly_above_every_control(tmp_path, real):
