@@ -115,6 +115,12 @@ def _pct(rate: Optional[float]) -> str:
     return "-" if rate is None else f"{100 * rate:.1f}%"
 
 
+def _count(count: int, n: int) -> str:
+    """A GL result as a bare count. GL results are never printed as percentages: the labels and fixtures share an
+    author, so a GL rate would invite quoting it as accuracy."""
+    return f"{count}/{n}"
+
+
 def _table(headers: Sequence[str], rows: Sequence[Sequence[str]]) -> List[str]:
     widths = [max(len(str(r[c])) for r in [headers, *rows]) for c in range(len(headers))]
 
@@ -165,7 +171,7 @@ def render_report(scored: Dict[str, Any]) -> str:
             _cell(g[scoring.ALL_HEADER]["strict"], g[scoring.ALL_HEADER]["n"]),
             _cell(g[scoring.ALL_HEADER]["lenient"], g[scoring.ALL_HEADER]["n"]),
             _cell(g[scoring.ALL_LINE]["strict"], g[scoring.ALL_LINE]["n"]),
-            _cell(g["gl"]["correct"], g["gl"]["scorable"]),
+            _count(g["gl"]["correct"], g["gl"]["scorable"]),
             str(g["extraction_errors"]),
         ])
     out += _table(
@@ -184,8 +190,8 @@ def render_report(scored: Dict[str, Any]) -> str:
         ["  fell back to the keyword coder (not scored)", str(gl["fallback"])],
         ["  no extracted line for the label", str(gl["no_line"])],
         ["Unscorable (no fitting account)", str(gl["unscorable"])],
-        ["LLM equals label / scorable lines", _cell(gl["correct"], gl["scorable"])],
-        ["LLM equals label / LLM-coded lines", _cell(gl["correct"], llm_coded)],
+        ["LLM code matched the label", _count(gl["correct"], gl["scorable"]) + " scorable lines matched"],
+        ["LLM code matched, of the lines it coded", _count(gl["correct"], llm_coded) + " LLM-coded lines matched"],
     ]
     out += _table(["row", "lines"], rows)
     fallbacks = [f"{d['doc_id']}#{r['line']}" for d in scored["documents"] for r in d["gl"] if r["status"] == "fallback"]
@@ -204,6 +210,10 @@ def write_reports(scored: Dict[str, Any], out_dir: str) -> List[str]:
         f.write(render_report(scored))
     # The banner is the first key so the file opens with the disclosure, as the text report does.
     ordered = {"banner": scored["banner"], **{k: v for k, v in scored.items() if k != "banner"}}
+    # GL results are counts only in every rendering, so the GL match rate is left out of the JSON as well.
+    ordered["summary"] = {
+        group: {k: v for k, v in values.items() if k != "gl_match_rate"} for group, values in scored["summary"].items()
+    }
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(ordered, f, indent=1, ensure_ascii=False, default=str)
     return [txt_path, json_path]
@@ -216,12 +226,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--out", default=DEFAULT_OUT_DIR, help="directory for the report files (default: eval/out)")
     args = parser.parse_args(argv)
 
+    # Only configuration errors are refusals (exit 2); a failure while running or scoring is a bug and must crash.
     try:
         provider = get_provider(args.provider, args.fixtures_dir)
-        scored = run_eval(provider)
+        banner_for(provider)
     except (NotImplementedError, ValueError) as exc:
         print(f"extraction eval not run: {exc}", file=sys.stderr)
         return 2
+    scored = run_eval(provider)
     report = render_report(scored)
     paths = write_reports(scored, args.out)
     sys.stdout.write(report)

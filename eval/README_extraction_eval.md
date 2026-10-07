@@ -36,13 +36,18 @@ pipeline module names or opens ground truth or labels.
   cells where ground truth holds a value. A value returned where ground truth is null is counted in its own column.
 - **Line items**: description, quantity, unit price, amount, matched to ground-truth lines by description, then by
   position.
+- Line-item cells whose ground-truth value is null still count in `n` and never match, unlike header cells, which
+  are not scorable when ground truth is null. The corpus has no null line-item cells today.
 - **Strict column**: amounts compared as decimals to the cent, dates as ISO strings, vendor/invoice/PO and
   descriptions case- and whitespace-insensitive with accents kept. **Lenient column**: the same with accents folded.
   The two are reported side by side and never merged.
 - **Breakdowns** per language (en/es) and per variant (pdf/scan/photo).
 - **GL coding** of the extracted lines, scored only on lines whose label is non-null. Null-label lines are counted
   in their own row ("unscorable (no fitting account)"). A line that fell back to the keyword coder is counted and
-  listed, not scored; the keyword coder's own result against the labels is deliberately not computed.
+  listed, not scored; the keyword coder's own result against the labels is deliberately not computed, and the
+  fallback record in the JSON carries no `got` (only `expected` and `fallback: true`). GL results are printed as
+  counts only (for example "47/56 scorable lines matched"), never as percentages, in stdout, the `.txt` file and the
+  `.json` file; extraction keeps its rates.
 
 ## Disclosure
 

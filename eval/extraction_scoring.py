@@ -194,20 +194,26 @@ def score_document(result: Any, ground_truth: Dict[str, Any], labels: Sequence[D
 
 
 def _score_gl(result: Any, labels: Sequence[Dict[str, Any]], by_truth: Dict[int, int]) -> List[Dict[str, Any]]:
-    """One record per label line. status is one of: correct, incorrect, fallback, no_line, unscorable."""
+    """One record per label line. status is one of: correct, incorrect, fallback, no_line, unscorable.
+
+    A line the keyword coder handled carries no `got`: only that the line fell back is recorded, so the keyword
+    coder's result against the labels cannot be derived from the report or the JSON.
+    """
     records = []
     for label in labels:
         j = label["line"]
         expected = label["account"]
         i = by_truth.get(j)
         code = result.gl_codes[i] if i is not None and i < len(result.gl_codes) else None
-        record = {"line": j, "expected": expected, "got": code.account if code else None}
+        record = {"line": j, "expected": expected, "got": code.account if code else None, "fallback": False}
         if expected is None:
             record["status"] = "unscorable"
         elif code is None:
             record["status"] = "no_line"
         elif code.source != "llm":
             record["status"] = "fallback"
+            record["got"] = None
+            record["fallback"] = True
         elif code.account == expected:
             record["status"] = "correct"
         else:

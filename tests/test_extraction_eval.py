@@ -318,6 +318,23 @@ def test_report_has_the_documented_sections_and_no_keyword_score(real):
     assert "delta" not in lowered and "vs keyword" not in lowered and "keyword coder score" not in lowered
 
 
+def test_gl_results_are_counts_only_in_every_rendering(real, tmp_path):
+    gl = real["summary"]["overall"]["gl"]
+    text = ee.render_report(real)
+    section_4 = text[text.index("4. GL CODING"):]
+    assert "%" not in section_4
+    assert f"{gl['correct']}/{gl['scorable']} scorable lines matched" in section_4
+    all_row = next(line for line in text.splitlines() if re.match(r"^all\s+\d+", line))
+    assert all_row.split()[-2] == f"{gl['correct']}/{gl['scorable']}"
+    txt, js = ee.write_reports(real, str(tmp_path / "out"))
+    with open(js, encoding="utf-8") as f:
+        raw = f.read()
+    assert "gl_match_rate" not in raw
+    assert "extraction_strict_rate" in raw  # extraction keeps its rates
+    with open(txt, encoding="utf-8") as f:
+        assert "%" not in f.read().split("4. GL CODING")[1]
+
+
 def test_nothing_in_the_eval_scores_the_keyword_coder():
     for name in ("extraction_eval.py", "extraction_scoring.py"):
         with open(os.path.join(EVAL_DIR, name), encoding="utf-8") as f:
@@ -335,6 +352,23 @@ def test_fallback_lines_are_listed_and_not_scored(tmp_path):
     gl = scored["summary"]["overall"]["gl"]
     assert gl["fallback"] >= 1
     assert f"{doc_id}#0" in ee.render_report(scored)
+
+
+def test_fallback_gl_records_never_expose_the_keyword_coders_answer(tmp_path):
+    d = _fresh_copy(tmp_path)
+    for doc_id in DOC_IDS:
+        _write(os.path.join(d, "gl", f"{doc_id}.json"), {"lines": []})
+    scored = _eval(d)
+    records = [r for doc in scored["documents"] for r in doc["gl"]]
+    fallbacks = [r for r in records if r["status"] == "fallback"]
+    assert len(fallbacks) == 56
+    for r in fallbacks:
+        assert r["got"] is None and r["fallback"] is True and r["expected"] is not None
+    assert not [r for r in records if r["status"] != "fallback" and r["fallback"]]
+    # The written JSON carries the same records, so the keyword coder's accounts are not recoverable from it either.
+    _, js = ee.write_reports(scored, str(tmp_path / "out"))
+    on_disk = [r for doc in _read(js)["documents"] for r in doc["gl"] if r["fallback"]]
+    assert len(on_disk) == 56 and all(r["got"] is None for r in on_disk)
 
 
 def test_extraction_failure_is_scored_as_misses_and_listed(tmp_path):
@@ -378,6 +412,17 @@ def test_a_provider_without_an_approved_banner_is_refused(capsys):
     captured = capsys.readouterr()
     assert "not run" in captured.err and ee.BANNER not in captured.out
     assert ee.main(["--provider", "nope"]) == 2
+
+
+def test_a_value_error_raised_while_scoring_is_a_crash_not_a_config_refusal(monkeypatch, tmp_path, capsys):
+    def broken_scorer(*_a, **_k):
+        raise ValueError("scoring bug")
+
+    monkeypatch.setattr(ee, "run_pipeline", lambda *_a, **_k: [])
+    monkeypatch.setattr(sc, "score_results", broken_scorer)
+    with pytest.raises(ValueError, match="scoring bug"):
+        ee.main(["--provider", "fixture", "--out", str(tmp_path)])
+    assert "not run" not in capsys.readouterr().err
 
 
 # --- 5b: reader-only isolation ----------------------------------------------------------------------------------
@@ -571,6 +616,7 @@ def test_command_line_run_reads_real_documents_and_writes_reports(tmp_path):
     assert proc.returncode == 0, proc.stderr
     assert proc.stdout.startswith(ee.BANNER)
     assert "44%" not in proc.stdout and "82%" not in proc.stdout
+    assert "%" not in proc.stdout[proc.stdout.index("4. GL CODING"):]
     assert proc.stderr == ""
     with open(tmp_path / ee.REPORT_TXT, encoding="utf-8") as f:
         assert f.read().startswith(ee.BANNER)
