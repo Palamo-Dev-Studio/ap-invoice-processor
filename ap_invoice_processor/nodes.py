@@ -12,6 +12,8 @@ from google.adk.workflow import node
 from ap_invoice_processor.models import InvoiceState, DecisionStep, LineItem
 from ap_invoice_processor.document_intake import fill_state_from_document
 from ap_invoice_processor.keyword_coder import keyword_code, match_vendor
+from ap_invoice_processor.llm.gl import code_lines, load_chart
+from ap_invoice_processor.llm.provider import get_provider
 from ap_invoice_processor.skill_loader import load_skill_rules
 from mcp_server.netsuite_mcp_client import post_invoice_sync
 
@@ -66,6 +68,7 @@ def intake_node(ctx: Context, node_input: Any) -> Event:
         # extraction in the same payload is ignored so the two sources never mix.
         extracted_sim = {}
         doc_summary = fill_state_from_document(invoice_state, document_path)
+        invoice_state.document_id = doc_summary["doc_id"]
         if not (payload and "id" in payload):
             invoice_state.invoice_id = invoice_id = doc_summary["doc_id"]
 
@@ -132,11 +135,71 @@ def extractor_node(ctx: Context, node_input: Any) -> Event:
     res_dict = invoice_state.model_dump()
     return Event(output=res_dict, state={"invoice_state": res_dict})
 
+def _gl_code_document(invoice_state: InvoiceState) -> Event:
+    """Code a document-intake invoice with the LLM coder; per-line failures fall back to the keyword coder.
+
+    A provider that is not enabled (NotImplementedError) or a misconfigured provider name (ValueError)
+    propagates rather than silently falling back to the keyword coder.
+    """
+    fields = invoice_state.extracted_fields
+    provider = get_provider()
+    codes = code_lines(
+        fields.line_items,
+        load_chart(),
+        provider,
+        invoice_state.document_id,
+        vendor_name=fields.vendor_name,
+        skill_rules=load_skill_rules(),
+    )
+
+    lines_summary = []
+    for i, (item, code) in enumerate(zip(fields.line_items, codes)):
+        item.gl_account = code.account
+        item.gl_account_name = code.account_name
+        item.department = code.department
+        lines_summary.append(
+            {
+                "line": i,
+                "account": code.account,
+                "source": code.source,
+                "confidence": code.confidence,
+                "reason": code.reason,
+            }
+        )
+    llm_count = sum(1 for code in codes if code.source == "llm")
+    fallback_count = len(codes) - llm_count
+
+    step = DecisionStep(
+        step_index=len(invoice_state.decision_trail) + 1,
+        node_name="GL-Coder",
+        action="Code Line Items via LLM Provider with Keyword Fallback",
+        reasoning=(
+            f"Coded {len(codes)} line items through the {type(provider).__name__}: "
+            f"{llm_count} by the LLM coder, {fallback_count} by the keyword fallback."
+        ),
+        confidence=min((code.confidence for code in codes), default=0.0),
+        output_summary={
+            "coded_line_items": len(codes),
+            "llm_coded": llm_count,
+            "keyword_fallback": fallback_count,
+            "provider": type(provider).__name__,
+            "lines": lines_summary,
+        },
+    )
+    invoice_state.decision_trail.append(step)
+
+    res_dict = invoice_state.model_dump()
+    return Event(output=res_dict, state={"invoice_state": res_dict})
+
+
 @node
 def gl_coder_node(ctx: Context, node_input: Any) -> Event:
     """GL-Coder node: map line items to GL accounts using SKILL.md rules."""
     state_dict = node_input if isinstance(node_input, dict) and "invoice_id" in node_input else ctx.state.get("invoice_state", {})
     invoice_state = InvoiceState(**state_dict)
+
+    if invoice_state.document_id is not None:
+        return _gl_code_document(invoice_state)
 
     skill_rules = load_skill_rules()
     vendor_master = _load_json_data("vendor_master.json")
