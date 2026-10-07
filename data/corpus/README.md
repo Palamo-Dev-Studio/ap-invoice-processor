@@ -84,9 +84,9 @@ plausible response; they are not recorded from a live model and say nothing abou
 - The GL fixtures were written by the same author after the labels, so fixture-versus-label agreement is **not
   independent** (the fixtures agree with the labels on 47 of the 56 non-null lines). It must never be reported as
   accuracy or compared against the keyword coder.
-- The extraction fixtures match ground truth on every field for 34 of the 40 documents (the 6 differences are OCR
-  damage), because a correct reading of clean reader text equals ground truth. Extraction scores computed over the
-  fixtures validate the scoring pipeline, not a model.
+- The extraction fixtures match ground truth on every field for 34 of the 40 documents after coercion (raw fixture
+  strings match on fewer; the 6 differences are OCR damage), because a correct reading of clean reader text equals
+  ground truth. Extraction scores computed over the fixtures validate the scoring pipeline, not a model.
 - 42 of the 98 GL lines have a `null` label (no fitting account in the five-account chart). A coder must pick an
   account, so a null-label line cannot be scored right or wrong; report these lines separately.
 
