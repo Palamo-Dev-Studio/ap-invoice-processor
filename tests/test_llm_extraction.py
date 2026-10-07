@@ -333,3 +333,12 @@ def test_reader_output_carrying_extra_attributes_is_rejected():
 def test_non_reader_input_is_rejected():
     with pytest.raises(ForbiddenInputError):
         extract_invoice("raw text", StubProvider(GOOD))
+
+
+_CURRENCY_MARKS = {"USD": ("USD", "$"), "GBP": ("GBP", "£"), "EUR": ("EUR", "€"), "MXN": ("MXN", "MX$", "$")}
+
+
+@pytest.mark.parametrize("doc_id", DOC_IDS)
+def test_fixture_currency_is_traceable_to_reader_text(doc_id):
+    fx = _fixture(doc_id)
+    assert any(mark in _reader_output(doc_id).text for mark in _CURRENCY_MARKS[fx["currency"]]), (doc_id, fx["currency"])
