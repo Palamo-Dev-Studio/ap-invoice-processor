@@ -1,0 +1,46 @@
+{
+  "doc_id": "en-008",
+  "base_doc_id": "en-008",
+  "source_file": "pdf/en-008.pdf",
+  "language": "en",
+  "variant": "pdf",
+  "layout": "classic",
+  "vendor_name": "Northgate Ridge Supply Co.",
+  "vendor_id": null,
+  "invoice_number": "NR-46847",
+  "invoice_date": "2026-09-04",
+  "due_date": "2026-09-19",
+  "currency": "USD",
+  "subtotal": 2443.79,
+  "tax_rate": 0.07,
+  "tax": 171.07,
+  "total": 2614.86,
+  "total_display": "$2,614.86",
+  "po_number": "PO-7402",
+  "line_items": [
+    {
+      "description": "Edge protectors, bundle",
+      "quantity": 10,
+      "unit_price": 14.71,
+      "amount": 147.1
+    },
+    {
+      "description": "Packing tape, case of 36",
+      "quantity": 9,
+      "unit_price": 49.34,
+      "amount": 444.06
+    },
+    {
+      "description": "Corrugated boxes, 24x18x12",
+      "quantity": 338,
+      "unit_price": 2.99,
+      "amount": 1010.62
+    },
+    {
+      "description": "Pallet wrap, 18in x 1500ft",
+      "quantity": 39,
+      "unit_price": 21.59,
+      "amount": 842.01
+    }
+  ]
+}

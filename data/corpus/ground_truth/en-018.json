@@ -1,0 +1,34 @@
+{
+  "doc_id": "en-018",
+  "base_doc_id": "en-018",
+  "source_file": "pdf/en-018.pdf",
+  "language": "en",
+  "variant": "pdf",
+  "layout": "letter",
+  "vendor_name": "Meridian Fieldworks Ltd.",
+  "vendor_id": null,
+  "invoice_number": "MF/71154",
+  "invoice_date": "2026-05-02",
+  "due_date": "2026-05-17",
+  "currency": "GBP",
+  "subtotal": 707.36,
+  "tax_rate": 0.2,
+  "tax": 141.47,
+  "total": 848.83,
+  "total_display": "£848.83",
+  "po_number": null,
+  "line_items": [
+    {
+      "description": "Soil sampling kit",
+      "quantity": 2,
+      "unit_price": 47.82,
+      "amount": 95.64
+    },
+    {
+      "description": "Reporting and drawings",
+      "quantity": 2,
+      "unit_price": 305.86,
+      "amount": 611.72
+    }
+  ]
+}

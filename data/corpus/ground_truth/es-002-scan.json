@@ -1,0 +1,41 @@
+{
+  "doc_id": "es-002-scan",
+  "base_doc_id": "es-002",
+  "source_file": "images/es-002-scan.png",
+  "language": "es",
+  "variant": "scan",
+  "layout": "twocol",
+  "vendor_name": "Servicios Tecnológicos Alborada S.A.",
+  "vendor_id": null,
+  "invoice_number": "STA-13711",
+  "invoice_date": "2026-05-17",
+  "due_date": "2026-07-01",
+  "currency": "MXN",
+  "subtotal": 17551.23,
+  "tax_rate": 0.16,
+  "tax": 2808.2,
+  "total": 20359.43,
+  "total_display": "$20,359.43",
+  "po_number": "OC-2026-3699",
+  "line_items": [
+    {
+      "description": "Instalación de equipo",
+      "quantity": 3,
+      "unit_price": 1144.68,
+      "amount": 3434.04
+    },
+    {
+      "description": "Soporte técnico mensual",
+      "quantity": 1,
+      "unit_price": 10260.79,
+      "amount": 10260.79
+    },
+    {
+      "description": "Licencia de antivirus, anual",
+      "quantity": 8,
+      "unit_price": 482.05,
+      "amount": 3856.4
+    }
+  ],
+  "ocr_lang": "eng"
+}

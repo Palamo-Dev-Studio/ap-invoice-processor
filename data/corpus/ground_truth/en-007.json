@@ -1,0 +1,28 @@
+{
+  "doc_id": "en-007",
+  "base_doc_id": "en-007",
+  "source_file": "pdf/en-007.pdf",
+  "language": "en",
+  "variant": "pdf",
+  "layout": "twocol",
+  "vendor_name": "Northgate Ridge Supply Co.",
+  "vendor_id": null,
+  "invoice_number": "NR-37494",
+  "invoice_date": "2026-01-13",
+  "due_date": "2026-02-27",
+  "currency": "USD",
+  "subtotal": 95.02,
+  "tax_rate": 0.0,
+  "tax": 0.0,
+  "total": 95.02,
+  "total_display": "$95.02",
+  "po_number": null,
+  "line_items": [
+    {
+      "description": "Packing tape, case of 36",
+      "quantity": 2,
+      "unit_price": 47.51,
+      "amount": 95.02
+    }
+  ]
+}

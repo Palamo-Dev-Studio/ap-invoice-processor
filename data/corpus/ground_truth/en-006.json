@@ -1,0 +1,34 @@
+{
+  "doc_id": "en-006",
+  "base_doc_id": "en-006",
+  "source_file": "pdf/en-006.pdf",
+  "language": "en",
+  "variant": "pdf",
+  "layout": "classic",
+  "vendor_name": "Quillstone Software Services",
+  "vendor_id": null,
+  "invoice_number": "QS-040821",
+  "invoice_date": "2026-09-05",
+  "due_date": "2026-10-05",
+  "currency": "GBP",
+  "subtotal": 2364.56,
+  "tax_rate": 0.2,
+  "tax": 472.91,
+  "total": 2837.47,
+  "total_display": "£2,837.47",
+  "po_number": "PO-7523",
+  "line_items": [
+    {
+      "description": "Additional seats",
+      "quantity": 18,
+      "unit_price": 28.14,
+      "amount": 506.52
+    },
+    {
+      "description": "Onboarding workshop, half day",
+      "quantity": 2,
+      "unit_price": 929.02,
+      "amount": 1858.04
+    }
+  ]
+}

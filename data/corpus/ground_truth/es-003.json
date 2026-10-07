@@ -1,0 +1,28 @@
+{
+  "doc_id": "es-003",
+  "base_doc_id": "es-003",
+  "source_file": "pdf/es-003.pdf",
+  "language": "es",
+  "variant": "pdf",
+  "layout": "letter",
+  "vendor_name": "Papelería El Roble S.A.",
+  "vendor_id": null,
+  "invoice_number": "PR-025672",
+  "invoice_date": "2026-09-25",
+  "due_date": "2026-10-10",
+  "currency": "USD",
+  "subtotal": 317.24,
+  "tax_rate": 0.0,
+  "tax": 0.0,
+  "total": 317.24,
+  "total_display": "$317.24",
+  "po_number": null,
+  "line_items": [
+    {
+      "description": "Carpetas archivadoras, paquete",
+      "quantity": 22,
+      "unit_price": 14.42,
+      "amount": 317.24
+    }
+  ]
+}

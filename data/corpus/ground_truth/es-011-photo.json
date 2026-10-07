@@ -1,0 +1,35 @@
+{
+  "doc_id": "es-011-photo",
+  "base_doc_id": "es-011",
+  "source_file": "images/es-011-photo.png",
+  "language": "es",
+  "variant": "photo",
+  "layout": "twocol",
+  "vendor_name": "Imprenta Sol Naciente S.L.",
+  "vendor_id": null,
+  "invoice_number": "ISN-87866",
+  "invoice_date": "2026-01-14",
+  "due_date": "2026-02-13",
+  "currency": "EUR",
+  "subtotal": 614.48,
+  "tax_rate": 0.1,
+  "tax": 61.45,
+  "total": 675.93,
+  "total_display": "675,93 €",
+  "po_number": null,
+  "line_items": [
+    {
+      "description": "Folletos A5 a color, millar",
+      "quantity": 3,
+      "unit_price": 129.12,
+      "amount": 387.36
+    },
+    {
+      "description": "Lonas publicitarias 2x1 m",
+      "quantity": 4,
+      "unit_price": 56.78,
+      "amount": 227.12
+    }
+  ],
+  "ocr_lang": "eng"
+}

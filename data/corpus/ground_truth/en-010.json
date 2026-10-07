@@ -1,0 +1,28 @@
+{
+  "doc_id": "en-010",
+  "base_doc_id": "en-010",
+  "source_file": "pdf/en-010.pdf",
+  "language": "en",
+  "variant": "pdf",
+  "layout": "letter",
+  "vendor_name": "Copperline Logistics Inc.",
+  "vendor_id": null,
+  "invoice_number": "CL-9603-26",
+  "invoice_date": "2026-09-28",
+  "due_date": null,
+  "currency": "USD",
+  "subtotal": 226.1,
+  "tax_rate": 0.0825,
+  "tax": 18.65,
+  "total": 244.75,
+  "total_display": "$244.75",
+  "po_number": null,
+  "line_items": [
+    {
+      "description": "Storage, per pallet per week",
+      "quantity": 17,
+      "unit_price": 13.3,
+      "amount": 226.1
+    }
+  ]
+}
