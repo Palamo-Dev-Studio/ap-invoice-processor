@@ -1,0 +1,16 @@
+{
+  "_authored_from": "reader_text",
+  "vendor_name": "Tidewell Office Furniture",
+  "invoice_number": "TW-65000",
+  "invoice_date": "2026-03-25",
+  "due_date": "2026-05-09",
+  "currency": "USD",
+  "po_number": null,
+  "line_items": [
+    {"description": "Monitor arm, dual", "quantity": 5, "unit_price": 57.34, "amount": 286.70},
+    {"description": "Height-adjustable desk", "quantity": 2, "unit_price": 372.92, "amount": 745.84}
+  ],
+  "subtotal": 1032.54,
+  "tax": 72.28,
+  "total": 1104.82
+}

@@ -1,0 +1,17 @@
+{
+  "_authored_from": "reader_text",
+  "vendor_name": "Acme Marketing Solutions",
+  "invoice_number": "AMS-77270",
+  "invoice_date": "2026-08-06",
+  "due_date": "2026-09-20",
+  "currency": "USD",
+  "po_number": "PO-8829",
+  "line_items": [
+    {"description": "Creative design (hrs)", "quantity": 25, "unit_price": 94.49, "amount": 2362.25},
+    {"description": "Social media ad spend", "quantity": 1, "unit_price": 467.74, "amount": 467.74},
+    {"description": "Landing page build", "quantity": 1, "unit_price": 1025.12, "amount": 1025.12}
+  ],
+  "subtotal": 3855.11,
+  "tax": 318.05,
+  "total": 4173.16
+}

@@ -1,0 +1,17 @@
+{
+  "_authored_from": "reader_text",
+  "_damage_note": "vendor name is cut off after 'Imprenta Sol' in the OCR text",
+  "vendor_name": "Imprenta Sol",
+  "invoice_number": "ISN-87866",
+  "invoice_date": "2026-01-14",
+  "due_date": "2026-02-13",
+  "currency": "EUR",
+  "po_number": null,
+  "line_items": [
+    {"description": "Folletos A5 a color, millar", "quantity": 3, "unit_price": 129.12, "amount": 387.36},
+    {"description": "Lonas publicitarias 2x1 m", "quantity": 4, "unit_price": 56.78, "amount": 227.12}
+  ],
+  "subtotal": 614.48,
+  "tax": 61.45,
+  "total": 675.93
+}

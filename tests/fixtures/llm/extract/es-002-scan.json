@@ -1,0 +1,18 @@
+{
+  "_authored_from": "reader_text",
+  "_damage_note": "accent damage in the vendor name and line descriptions, copied as printed in the OCR text",
+  "vendor_name": "Servicios Tecnolégicos Alborada S.A.",
+  "invoice_number": "STA-13711",
+  "invoice_date": "2026-05-17",
+  "due_date": "2026-07-01",
+  "currency": "MXN",
+  "po_number": "OC-2026-3699",
+  "line_items": [
+    {"description": "Instalacion de equipo", "quantity": 3, "unit_price": 1144.68, "amount": 3434.04},
+    {"description": "Soporte técnico mensual", "quantity": 1, "unit_price": 10260.79, "amount": 10260.79},
+    {"description": "Licencia de antivirus, anual", "quantity": 8, "unit_price": 482.05, "amount": 3856.40}
+  ],
+  "subtotal": 17551.23,
+  "tax": 2808.20,
+  "total": 20359.43
+}

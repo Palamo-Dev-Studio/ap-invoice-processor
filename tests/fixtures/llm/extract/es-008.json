@@ -1,0 +1,17 @@
+{
+  "_authored_from": "reader_text",
+  "vendor_name": "Distribuidora Costa Verde S.L.",
+  "invoice_number": "DCV-2026/3088",
+  "invoice_date": "2026-07-13",
+  "due_date": "2026-08-27",
+  "currency": "EUR",
+  "po_number": "OC-2026-1783",
+  "line_items": [
+    {"description": "Transporte refrigerado", "quantity": 2, "unit_price": 103.66, "amount": 207.32},
+    {"description": "Envases reutilizables", "quantity": 58, "unit_price": 7.56, "amount": 438.48},
+    {"description": "Aceite de oliva, caja 12 L", "quantity": 15, "unit_price": 93.76, "amount": 1406.40}
+  ],
+  "subtotal": 2052.20,
+  "tax": 430.96,
+  "total": 2483.16
+}

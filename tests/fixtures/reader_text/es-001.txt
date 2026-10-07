@@ -1,0 +1,33 @@
+ FACTURA                                                              Limpieza Integral Mirador S.L.
+                                                                                            Calle Alcalá 140, 2.º B
+                                                                                                     28009 Madrid
+
+
+
+
+N.º DE FACTURA
+LIM-81302                         Descripción                      Cant.     Precio unit.               Importe
+
+FECHA DE EMISIÓN                  Limpieza mensual de oficinas         1        634,73 €                634,73 €
+12/07/2026
+                                  Reposición de consumibles            2         44,46 €                 88,92 €
+
+VENCIMIENTO
+27/07/2026                                                       Subtotal                             723,65 €
+                                                                 IVA (21%)                            151,97 €
+ORDEN DE COMPRA
+OC-2026-1372                                                     Total (EUR)                         875,62 €
+
+FACTURAR A
+Cedar & Finch Operaciones S.A.
+Calle Demostración 200
+Ejemplópolis 00000
+
+CONDICIONES
+Neto 15 días
+
+
+
+
+                                 Gracias por su preferencia.
+

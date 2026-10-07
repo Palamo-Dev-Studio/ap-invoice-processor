@@ -1,0 +1,18 @@
+{
+  "_authored_from": "reader_text",
+  "vendor_name": "Larkspur Catering Group",
+  "invoice_number": "LC-3871",
+  "invoice_date": "2026-08-12",
+  "due_date": "2026-09-11",
+  "currency": "USD",
+  "po_number": null,
+  "line_items": [
+    {"description": "Coffee and pastry service", "quantity": 21, "unit_price": 13.89, "amount": 291.69},
+    {"description": "Service staff, hourly", "quantity": 15, "unit_price": 35.54, "amount": 533.10},
+    {"description": "Working lunch, per head", "quantity": 12, "unit_price": 20.38, "amount": 244.56},
+    {"description": "Equipment rental", "quantity": 1, "unit_price": 61.26, "amount": 61.26}
+  ],
+  "subtotal": 1130.61,
+  "tax": 93.28,
+  "total": 1223.89
+}

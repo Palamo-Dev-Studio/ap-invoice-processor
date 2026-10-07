@@ -1,0 +1,31 @@
+ FACTURA                                                          Servicios Tecnológicos Alborada S.A.
+                                                                                     Paseo de la Reforma 505, Piso 12
+                                                                                             Ciudad de México 06500
+
+
+
+
+N.º DE FACTURA
+STA-51293                         Descripción                           Cant.       Precio unit.           Importe
+
+FECHA DE EMISIÓN                  Mantenimiento de servidores (hrs)         6           $914.62           $5,487.72
+2026-04-17
+                                  Licencia de antivirus, anual            27            $494.02          $13,338.54
+
+VENCIMIENTO                       Instalación de equipo                     3         $1,705.19           $5,115.57
+2026-05-02
+
+FACTURAR A                                                            Subtotal                         $23,941.83
+Cedar & Finch Operaciones S.A.                                        IVA (8.25%)                       $1,975.20
+Calle Demostración 200
+                                                                      Total (USD)                    $25,917.03
+Ejemplópolis 00000
+
+CONDICIONES
+Neto 15 días
+
+
+
+
+                                 Gracias por su preferencia.
+

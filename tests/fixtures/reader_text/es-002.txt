@@ -1,0 +1,33 @@
+ FACTURA                                                         Servicios Tecnológicos Alborada S.A.
+                                                                                  Paseo de la Reforma 505, Piso 12
+                                                                                          Ciudad de México 06500
+
+
+
+
+N.º DE FACTURA
+STA-13711                         Descripción                         Cant.     Precio unit.            Importe
+
+FECHA DE EMISIÓN                  Instalación de equipo                   3        $1,144.68           $3,434.04
+17 de mayo de 2026
+                                  Soporte técnico mensual                 1       $10,260.79          $10,260.79
+
+VENCIMIENTO                       Licencia de antivirus, anual            8         $482.05            $3,856.40
+1 de julio de 2026
+
+ORDEN DE COMPRA                                                     Subtotal                        $17,551.23
+OC-2026-3699                                                        IVA (16%)                        $2,808.20
+                                                                    Total (MXN)                   $20,359.43
+FACTURAR A
+Cedar & Finch Operaciones S.A.
+Calle Demostración 200
+Ejemplópolis 00000
+
+CONDICIONES
+Neto 45 días
+
+
+
+
+                                 Gracias por su preferencia.
+

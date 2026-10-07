@@ -1,0 +1,17 @@
+{
+  "_authored_from": "reader_text",
+  "vendor_name": "Brightwater Janitorial LLC",
+  "invoice_number": "BW087360",
+  "invoice_date": "2026-09-06",
+  "due_date": null,
+  "currency": "USD",
+  "po_number": null,
+  "line_items": [
+    {"description": "Floor stripping and waxing", "quantity": 1, "unit_price": "$309.27", "amount": "$309.27"},
+    {"description": "Monthly cleaning service, Suite 200", "quantity": 1, "unit_price": "$870.87", "amount": "$870.87"},
+    {"description": "Restroom supply restock", "quantity": 1, "unit_price": "$120.25", "amount": "$120.25"}
+  ],
+  "subtotal": "$1,300.39",
+  "tax": "$91.03",
+  "total": "$1,391.42"
+}

@@ -1,0 +1,16 @@
+{
+  "_authored_from": "reader_text",
+  "vendor_name": "Copperline Logistics Inc.",
+  "invoice_number": "CL-3905-26",
+  "invoice_date": "2026-09-05",
+  "due_date": null,
+  "currency": "USD",
+  "po_number": "PO-7867",
+  "line_items": [
+    {"description": "Storage, per pallet per week", "quantity": 16, "unit_price": 17.48, "amount": 279.68},
+    {"description": "Freight, LTL Savannah to Columbus", "quantity": 1, "unit_price": 498.69, "amount": 498.69}
+  ],
+  "subtotal": 778.37,
+  "tax": 0.00,
+  "total": 778.37
+}

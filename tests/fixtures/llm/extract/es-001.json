@@ -1,0 +1,16 @@
+{
+  "_authored_from": "reader_text",
+  "vendor_name": "Limpieza Integral Mirador S.L.",
+  "invoice_number": "LIM-81302",
+  "invoice_date": "12/07/2026",
+  "due_date": "27/07/2026",
+  "currency": "EUR",
+  "po_number": "OC-2026-1372",
+  "line_items": [
+    {"description": "Limpieza mensual de oficinas", "quantity": 1, "unit_price": "634,73 €", "amount": "634,73 €"},
+    {"description": "Reposición de consumibles", "quantity": 2, "unit_price": "44,46 €", "amount": "88,92 €"}
+  ],
+  "subtotal": "723,65 €",
+  "tax": "151,97 €",
+  "total": "875,62 €"
+}

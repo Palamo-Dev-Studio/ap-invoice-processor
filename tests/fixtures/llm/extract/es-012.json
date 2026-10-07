@@ -1,0 +1,16 @@
+{
+  "_authored_from": "reader_text",
+  "vendor_name": "Papelería El Roble S.A.",
+  "invoice_number": "PR-073362",
+  "invoice_date": "2026-03-15",
+  "due_date": "2026-04-14",
+  "currency": "USD",
+  "po_number": null,
+  "line_items": [
+    {"description": "Carpetas archivadoras, paquete", "quantity": 20, "unit_price": 22.62, "amount": 452.40},
+    {"description": "Marcadores surtidos, caja", "quantity": 16, "unit_price": 14.84, "amount": 237.44}
+  ],
+  "subtotal": 689.84,
+  "tax": 0.00,
+  "total": 689.84
+}

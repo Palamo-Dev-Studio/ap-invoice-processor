@@ -1,0 +1,15 @@
+{
+  "_authored_from": "reader_text",
+  "vendor_name": "Apex Consulting Group",
+  "invoice_number": "AC-42503",
+  "invoice_date": "2026-01-24",
+  "due_date": "2026-03-10",
+  "currency": "USD",
+  "po_number": "PO-8812",
+  "line_items": [
+    {"description": "Process review workshop", "quantity": 1, "unit_price": 1688.11, "amount": 1688.11}
+  ],
+  "subtotal": 1688.11,
+  "tax": 0.00,
+  "total": 1688.11
+}

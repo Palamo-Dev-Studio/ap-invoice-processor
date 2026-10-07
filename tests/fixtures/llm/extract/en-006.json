@@ -1,0 +1,16 @@
+{
+  "_authored_from": "reader_text",
+  "vendor_name": "Quillstone Software Services",
+  "invoice_number": "QS-040821",
+  "invoice_date": "2026-09-05",
+  "due_date": "2026-10-05",
+  "currency": "GBP",
+  "po_number": "PO-7523",
+  "line_items": [
+    {"description": "Additional seats", "quantity": 18, "unit_price": 28.14, "amount": 506.52},
+    {"description": "Onboarding workshop, half day", "quantity": 2, "unit_price": 929.02, "amount": 1858.04}
+  ],
+  "subtotal": 2364.56,
+  "tax": 472.91,
+  "total": 2837.47
+}

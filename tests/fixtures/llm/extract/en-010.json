@@ -1,0 +1,15 @@
+{
+  "_authored_from": "reader_text",
+  "vendor_name": "Copperline Logistics Inc.",
+  "invoice_number": "CL-9603-26",
+  "invoice_date": "September 28, 2026",
+  "due_date": null,
+  "currency": "USD",
+  "po_number": null,
+  "line_items": [
+    {"description": "Storage, per pallet per week", "quantity": 17, "unit_price": 13.30, "amount": 226.10}
+  ],
+  "subtotal": 226.10,
+  "tax": 18.65,
+  "total": 244.75
+}

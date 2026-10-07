@@ -1,0 +1,16 @@
+{
+  "_authored_from": "reader_text",
+  "vendor_name": "Transportes Cumbre del Sur S.A.",
+  "invoice_number": "TCS-19159",
+  "invoice_date": "2026-01-15",
+  "due_date": "2026-02-14",
+  "currency": "USD",
+  "po_number": "OC-2026-4954",
+  "line_items": [
+    {"description": "Estadía por día", "quantity": 2, "unit_price": 165.09, "amount": 330.18},
+    {"description": "Maniobras de carga y descarga", "quantity": 1, "unit_price": 161.08, "amount": 161.08}
+  ],
+  "subtotal": 491.26,
+  "tax": 0.00,
+  "total": 491.26
+}

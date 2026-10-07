@@ -1,0 +1,39 @@
+FACTURA
+
+Servicios Tecnolégicos Alborada S.A.
+Pase aR 505, Piso 12
+
+Descripcién Cant. Precio unit. Importe
+Instalacion de equipo 3 $1,144.68 $3,434.04
+Soporte técnico mensual 1 $10,260.79 $10,260.79
+Licencia de antivirus, anual 8 $482.05 $3,856.40
+Subtotal $17,551.23
+IVA (16%) $2,808.20
+Total (MXN) $20,359.43
+
+Gracias por su preferencia.
+
+FACTURA eee ears ee
+
+N.° DE FACTURA
+
+STA-13711 Descripcion Cant. Precio unit. Importe
+FECHA DE EMISION Instalacion de equipo 3 $1,144.68 $3,434.04
+17 de mayo de 2026 -
+Soporte técnico mensual 1 $10,260.79 $10,260.79
+VENCIMIENTO Licencia de antivirus, anual 8 $482.05 $3,856.40
+1 de julio de 2026
+EET E COUrnA Subtotal $17,551.23
+OC-2026-3699 IVA (16%) $2,808.20
+Total (MXN) $20,359.43
+
+FACTURAR A
+
+Cedar & Finch Operaciones S.A.
+Calle Demostracién 200
+Ejemplépolis 00000
+
+CONDICIONES
+Neto 45 dias
+
+Gracias por su preferencia.

@@ -1,0 +1,17 @@
+{
+  "_authored_from": "reader_text",
+  "vendor_name": "Ferretería Los Álamos S.A. de C.V.",
+  "invoice_number": "FA-38218",
+  "invoice_date": "2026-02-07",
+  "due_date": null,
+  "currency": "MXN",
+  "po_number": "OC-2026-4111",
+  "line_items": [
+    {"description": "Tornillería surtida, caja", "quantity": 10, "unit_price": 335.42, "amount": 3354.20},
+    {"description": "Herramienta menor, kit", "quantity": 1, "unit_price": 696.26, "amount": 696.26},
+    {"description": "Pintura vinílica, cubeta 19 L", "quantity": 2, "unit_price": 1714.65, "amount": 3429.30}
+  ],
+  "subtotal": 7479.76,
+  "tax": 1196.76,
+  "total": 8676.52
+}
