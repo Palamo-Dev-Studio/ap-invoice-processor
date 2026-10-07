@@ -77,6 +77,8 @@ def read_document(path: str) -> ReaderOutput:
     """Read an invoice document (PDF or image) and return its text plus how it was obtained."""
     if not os.path.isfile(path):
         raise ReaderError(f"document not found: {path}")
+    # An absolute path cannot start with "-", so a file named like an option is never parsed as one by the tools.
+    path = os.path.abspath(path)
     doc_id, suffix = os.path.splitext(os.path.basename(path))
     suffix = suffix.lower()
 

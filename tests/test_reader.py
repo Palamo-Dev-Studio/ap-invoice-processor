@@ -95,6 +95,25 @@ def test_empty_pdf_text_falls_back_to_ocr(monkeypatch):
     assert gt["vendor_name"] in out.text
 
 
+@pytest.mark.parametrize("name, tool", [("-opts.pdf", "pdftotext"), ("-opts.png", "tesseract")])
+def test_relative_path_starting_with_dash_reaches_the_tool_as_an_absolute_path(tmp_path, monkeypatch, name, tool):
+    (tmp_path / name).write_bytes(b"x")
+    monkeypatch.chdir(tmp_path)
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, stdout="plenty of invoice text here", stderr="")
+
+    monkeypatch.setattr(reader.subprocess, "run", fake_run)
+    out = read_document(name)
+    assert out.doc_id == os.path.splitext(name)[0]
+    assert calls and calls[0][0] == tool
+    paths = [arg for arg in calls[0] if arg.endswith(name)]
+    assert len(paths) == 1 and os.path.isabs(paths[0])
+    assert not any(arg.startswith("-opts") for arg in calls[0])
+
+
 def test_timeout_raises_reader_error(monkeypatch):
     def boom(cmd, **kwargs):
         assert kwargs["timeout"] == 60
