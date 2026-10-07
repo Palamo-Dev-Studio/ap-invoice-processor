@@ -1,0 +1,23 @@
+{
+ "_authored_from": "reader_text",
+ "lines": [
+  {
+   "line": 0,
+   "account": "6500",
+   "confidence": 0.8,
+   "reason": "Printed posters for promotion and display."
+  },
+  {
+   "line": 1,
+   "account": "6500",
+   "confidence": 0.6,
+   "reason": "Printed collateral; could also be office stationery."
+  },
+  {
+   "line": 2,
+   "account": "6500",
+   "confidence": 0.4,
+   "reason": "Installation of printed signage; no installation account, marketing is closest."
+  }
+ ]
+}

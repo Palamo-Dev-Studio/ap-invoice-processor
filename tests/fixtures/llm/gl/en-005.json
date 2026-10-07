@@ -1,0 +1,29 @@
+{
+ "_authored_from": "reader_text",
+ "lines": [
+  {
+   "line": 0,
+   "account": "6100",
+   "confidence": 0.75,
+   "reason": "Software seat licences."
+  },
+  {
+   "line": 1,
+   "account": "6200",
+   "confidence": 0.7,
+   "reason": "Training workshop delivered as a service."
+  },
+  {
+   "line": 2,
+   "account": "6100",
+   "confidence": 0.6,
+   "reason": "Software subscription; could be hosted platform."
+  },
+  {
+   "line": 3,
+   "account": "6100",
+   "confidence": 0.6,
+   "reason": "Support add-on to a software subscription."
+  }
+ ]
+}

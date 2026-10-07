@@ -1,0 +1,29 @@
+{
+ "_authored_from": "reader_text",
+ "lines": [
+  {
+   "line": 0,
+   "account": "6100",
+   "confidence": 0.4,
+   "reason": "Shipping supplies; no packaging account, office supplies is closest."
+  },
+  {
+   "line": 1,
+   "account": "6100",
+   "confidence": 0.4,
+   "reason": "Shipping supplies; no packaging account, office supplies is closest."
+  },
+  {
+   "line": 2,
+   "account": "6100",
+   "confidence": 0.4,
+   "reason": "Shipping supplies; no packaging account, office supplies is closest."
+  },
+  {
+   "line": 3,
+   "account": "6100",
+   "confidence": 0.4,
+   "reason": "Shipping supplies; no packaging account, office supplies is closest."
+  }
+ ]
+}

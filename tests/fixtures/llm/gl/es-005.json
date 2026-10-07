@@ -1,0 +1,23 @@
+{
+ "_authored_from": "reader_text",
+ "lines": [
+  {
+   "line": 0,
+   "account": "6200",
+   "confidence": 0.55,
+   "reason": "Hourly server maintenance labour; could be hosting."
+  },
+  {
+   "line": 1,
+   "account": "6100",
+   "confidence": 0.8,
+   "reason": "Annual software licence."
+  },
+  {
+   "line": 2,
+   "account": "7000",
+   "confidence": 0.5,
+   "reason": "Equipment installation; treated as part of the hardware."
+  }
+ ]
+}
