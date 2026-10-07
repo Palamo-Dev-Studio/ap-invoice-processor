@@ -335,6 +335,7 @@ def test_non_reader_input_is_rejected():
         extract_invoice("raw text", StubProvider(GOOD))
 
 
+# USD and MXN both accept "$", so a USD<->MXN swap in a fixture is not caught by this trace.
 _CURRENCY_MARKS = {"USD": ("USD", "$"), "GBP": ("GBP", "£"), "EUR": ("EUR", "€"), "MXN": ("MXN", "MX$", "$")}
 
 
