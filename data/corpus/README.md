@@ -21,6 +21,38 @@ client data are involved.
 The installed Tesseract data holds only `eng` and `osd`. Spanish scan/photo variants are therefore OCR'd
 with `-l eng` and will show accent damage; do not quote a Spanish OCR accuracy figure from this corpus.
 
+## Ground-truth fields vs `ap_invoice_processor/models.py`
+
+| Ground truth | Model field |
+|---|---|
+| `vendor_name` | `ExtractedInvoiceFields.vendor_name` |
+| `vendor_id` | `ExtractedInvoiceFields.vendor_id` |
+| `invoice_number` | `ExtractedInvoiceFields.invoice_number` |
+| `invoice_date` (ISO) | `ExtractedInvoiceFields.date` |
+| `po_number` | `ExtractedInvoiceFields.po_number` |
+| `total` | `ExtractedInvoiceFields.total_amount` |
+| `line_items[].description` | `LineItem.description` |
+| `line_items[].quantity` | `LineItem.qty` |
+| `line_items[].unit_price` | `LineItem.unit_price` |
+| `line_items[].amount` | `LineItem.amount` |
+
+Ground-truth fields with no model counterpart: `due_date`, `currency`, `subtotal`, `tax`, `tax_rate`,
+`total_display` (the printed total, used by the reader tests), `language`, `variant`, `layout`, `ocr_lang`,
+`base_doc_id`, `source_file`, `doc_id`.
+
+## OCR coverage on the image variants
+
+The reader OCRs each image twice (Tesseract default plus Sauvola thresholding, `-c thresholding_method=2`)
+and joins the outputs, because the default pass alone drops the tinted sidebar of the `twocol` layout.
+`tests/test_reader.py` asserts that all 10 image variants yield the ground-truth invoice number and
+`total_display`; all 10 pass. Fields that are **not** reliably recovered by OCR:
+
+- Vendor name: missing from the OCR text for `en-017-photo`, `es-002-scan` and `es-011-photo` (image
+  degradation, not only accents), and for `es-003-photo` and `es-007-scan` only because accents are damaged
+  (they match once accents are folded).
+- Spanish accents in general: OCR runs with `-l eng` (only `eng` and `osd` are installed).
+- Invoice date in the printed form is not asserted for images; the ground truth stores it as ISO.
+
 ## Regenerate
 
 ```
@@ -30,3 +62,8 @@ with `-l eng` and will show accent damage; do not quote a Spanish OCR accuracy f
 Needs Pillow, numpy and reportlab (the project venv does not have them) and `pdftoppm` on PATH. Every random
 operation is seeded (`SEED` in the script), so reruns reproduce the committed files byte for byte; the script
 prints a corpus-wide sha256 at the end. The script deletes and rewrites `pdf/`, `images/` and `ground_truth/`.
+
+Byte-for-byte regeneration also depends on the installed library versions. The committed files were produced with
+reportlab 4.5.1, Pillow 12.1.1, numpy 2.4.3 and poppler `pdftoppm` 26.09.0 (Python 3.13.7). Other versions
+may change fonts, PDF object layout, rasterisation or the random-number-driven pixel noise, so the corpus-wide sha256
+can differ even though every operation is seeded.

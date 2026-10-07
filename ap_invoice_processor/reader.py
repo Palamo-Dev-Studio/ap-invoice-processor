@@ -29,7 +29,14 @@ class ReaderOutput(BaseModel):
 def _run(cmd: List[str]) -> subprocess.CompletedProcess:
     """Run one external tool with a timeout, converting every failure into ReaderError."""
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=SUBPROCESS_TIMEOUT_S, check=False)
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=SUBPROCESS_TIMEOUT_S,
+            check=False,
+        )
     except subprocess.TimeoutExpired as exc:
         raise ReaderError(f"{cmd[0]} timed out after {SUBPROCESS_TIMEOUT_S}s") from exc
     except FileNotFoundError as exc:
@@ -40,7 +47,15 @@ def _run(cmd: List[str]) -> subprocess.CompletedProcess:
 
 
 def _ocr_image(image_path: str) -> str:
-    return _run(["tesseract", image_path, "-", "-l", OCR_LANG]).stdout
+    """OCR one image twice and join the outputs.
+
+    Tesseract's default binarisation drops the tinted sidebar of the twocol layout (invoice number,
+    dates, PO, bill-to), while Sauvola local thresholding (thresholding_method=2) recovers it but loses
+    some vendor names. The two passes are complementary, so both outputs are kept.
+    """
+    default = _run(["tesseract", image_path, "-", "-l", OCR_LANG]).stdout
+    sauvola = _run(["tesseract", image_path, "-", "-l", OCR_LANG, "-c", "thresholding_method=2"]).stdout
+    return default + "\n" + sauvola
 
 
 def _pdf_text(pdf_path: str) -> str:

@@ -38,15 +38,43 @@ def test_pdf_text_contains_vendor_and_total(doc_id):
     assert gt["invoice_number"] in out.text
 
 
-def test_scan_variant_uses_tesseract_english():
-    # en-005-scan is a deterministic fixture whose OCR output carries the vendor name and total.
-    gt = _gt("en-005-scan")
-    out = read_document(os.path.join(CORPUS, "images", "en-005-scan.png"))
-    assert out.doc_id == "en-005-scan"
+IMAGE_IDS = sorted(os.path.splitext(os.path.basename(p))[0] for p in glob.glob(os.path.join(CORPUS, "images", "*.png")))
+
+
+@pytest.mark.parametrize("doc_id", IMAGE_IDS)
+def test_image_variant_ocr_recovers_invoice_number_and_total(doc_id):
+    # Covers all layouts: the twocol sidebar is lost by Tesseract's default thresholding alone.
+    gt = _gt(doc_id)
+    out = read_document(os.path.join(CORPUS, "images", f"{doc_id}.png"))
+    assert out.doc_id == doc_id
     assert out.method == "tesseract"
     assert out.ocr_lang == "eng"
-    assert gt["vendor_name"] in out.text
+    assert gt["invoice_number"] in out.text
     assert gt["total_display"] in out.text
+
+
+def test_corpus_has_ten_image_variants():
+    assert len(IMAGE_IDS) == 10
+
+
+def test_tesseract_argv_is_english_and_runs_both_thresholding_modes(monkeypatch):
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        assert kwargs["encoding"] == "utf-8"
+        assert kwargs["errors"] == "replace"
+        return subprocess.CompletedProcess(cmd, 0, stdout=f"out{len(calls)}", stderr="")
+
+    monkeypatch.setattr(reader.subprocess, "run", fake_run)
+    text = reader._ocr_image("page.png")
+    assert len(calls) == 2
+    for cmd in calls:
+        assert cmd[0] == "tesseract"
+        assert cmd[cmd.index("-l") + 1] == "eng"
+    assert "thresholding_method=2" not in calls[0]
+    assert calls[1][-2:] == ["-c", "thresholding_method=2"]
+    assert text == "out1\nout2"
 
 
 def test_empty_pdf_text_falls_back_to_ocr(monkeypatch):
