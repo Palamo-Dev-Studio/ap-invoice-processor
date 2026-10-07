@@ -53,6 +53,21 @@ and joins the outputs, because the default pass alone drops the tinted sidebar o
 - Spanish accents in general: OCR runs with `-l eng` (only `eng` and `osd` are installed).
 - Invoice date in the printed form is not asserted for images; the ground truth stores it as ISO.
 
+## GL labels
+
+`gl_labels.json` maps each `doc_id` (all 40 documents) to its line items, each with the expected GL account:
+`{"line": <index>, "description": ..., "account": "<chart account number>" | null, "basis": "<short reason>"}`.
+
+Labelling rule: each line description was read against the account names in `data/gl_chart_of_accounts.json`
+and given the one account whose name covers the expense the line describes (marketing and advertising
+materials, software licences and subscriptions, office furniture and stationery, consulting, reporting and IT
+technical services). Ancillary charges (delivery, assembly) follow the goods they relate to. `account` is
+`null` when no account in the five-account chart fits (freight, warehousing, catering, janitorial, food goods,
+hardware-store goods, field kits and travel); 42 of the 98 lines are `null`. The labels were written by hand
+from the line descriptions before any coder or fixture for them existed; no coder was run to produce them, and
+they are one reader's reading of a small chart, not an audited standard. An image variant carries the same
+lines as its base document, so its labels repeat.
+
 ## Regenerate
 
 ```

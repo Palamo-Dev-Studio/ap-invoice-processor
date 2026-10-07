@@ -1,0 +1,673 @@
+{
+ "_rule": "See data/corpus/README.md, 'GL labels'. account is a chart account number, or null when no chart account fits.",
+ "labels": {
+  "en-001": [
+   {
+    "line": 0,
+    "description": "Foam board posters 24x36",
+    "account": "6500",
+    "basis": "printed display posters"
+   },
+   {
+    "line": 1,
+    "description": "Business cards, box of 500",
+    "account": "6100",
+    "basis": "stationery"
+   },
+   {
+    "line": 2,
+    "description": "Installation labour, hourly",
+    "account": null,
+    "basis": "signage installation labour; no chart account fits"
+   }
+  ],
+  "en-002": [
+   {
+    "line": 0,
+    "description": "Monitor arm, dual",
+    "account": "6100",
+    "basis": "office furniture accessory, not computer hardware"
+   },
+   {
+    "line": 1,
+    "description": "Height-adjustable desk",
+    "account": "6100",
+    "basis": "office furniture"
+   }
+  ],
+  "en-003": [
+   {
+    "line": 0,
+    "description": "Process review workshop",
+    "account": "6200",
+    "basis": "advisory/review workshop"
+   }
+  ],
+  "en-004-scan": [
+   {
+    "line": 0,
+    "description": "Creative design (hrs)",
+    "account": "6500",
+    "basis": "creative design work for marketing"
+   },
+   {
+    "line": 1,
+    "description": "Social media ad spend",
+    "account": "6500",
+    "basis": "advertising spend"
+   },
+   {
+    "line": 2,
+    "description": "Landing page build",
+    "account": "6500",
+    "basis": "marketing landing page"
+   }
+  ],
+  "en-004": [
+   {
+    "line": 0,
+    "description": "Creative design (hrs)",
+    "account": "6500",
+    "basis": "creative design work for marketing"
+   },
+   {
+    "line": 1,
+    "description": "Social media ad spend",
+    "account": "6500",
+    "basis": "advertising spend"
+   },
+   {
+    "line": 2,
+    "description": "Landing page build",
+    "account": "6500",
+    "basis": "marketing landing page"
+   }
+  ],
+  "en-005-scan": [
+   {
+    "line": 0,
+    "description": "Additional seats",
+    "account": "6100",
+    "basis": "software seat licences"
+   },
+   {
+    "line": 1,
+    "description": "Onboarding workshop, half day",
+    "account": "6200",
+    "basis": "training/advisory workshop"
+   },
+   {
+    "line": 2,
+    "description": "Platform subscription, monthly",
+    "account": "6100",
+    "basis": "software subscription"
+   },
+   {
+    "line": 3,
+    "description": "Priority support add-on",
+    "account": "6100",
+    "basis": "software support add-on"
+   }
+  ],
+  "en-005": [
+   {
+    "line": 0,
+    "description": "Additional seats",
+    "account": "6100",
+    "basis": "software seat licences"
+   },
+   {
+    "line": 1,
+    "description": "Onboarding workshop, half day",
+    "account": "6200",
+    "basis": "training/advisory workshop"
+   },
+   {
+    "line": 2,
+    "description": "Platform subscription, monthly",
+    "account": "6100",
+    "basis": "software subscription"
+   },
+   {
+    "line": 3,
+    "description": "Priority support add-on",
+    "account": "6100",
+    "basis": "software support add-on"
+   }
+  ],
+  "en-006": [
+   {
+    "line": 0,
+    "description": "Additional seats",
+    "account": "6100",
+    "basis": "software seat licences"
+   },
+   {
+    "line": 1,
+    "description": "Onboarding workshop, half day",
+    "account": "6200",
+    "basis": "training/advisory workshop"
+   }
+  ],
+  "en-007": [
+   {
+    "line": 0,
+    "description": "Packing tape, case of 36",
+    "account": null,
+    "basis": "shipping packaging; no chart account fits"
+   }
+  ],
+  "en-008": [
+   {
+    "line": 0,
+    "description": "Edge protectors, bundle",
+    "account": null,
+    "basis": "shipping packaging; no chart account fits"
+   },
+   {
+    "line": 1,
+    "description": "Packing tape, case of 36",
+    "account": null,
+    "basis": "shipping packaging; no chart account fits"
+   },
+   {
+    "line": 2,
+    "description": "Corrugated boxes, 24x18x12",
+    "account": null,
+    "basis": "shipping packaging; no chart account fits"
+   },
+   {
+    "line": 3,
+    "description": "Pallet wrap, 18in x 1500ft",
+    "account": null,
+    "basis": "shipping packaging; no chart account fits"
+   }
+  ],
+  "en-009-scan": [
+   {
+    "line": 0,
+    "description": "Delivery and assembly",
+    "account": "6100",
+    "basis": "ancillary to office furniture"
+   },
+   {
+    "line": 1,
+    "description": "Task chair, mesh back",
+    "account": "6100",
+    "basis": "office furniture"
+   },
+   {
+    "line": 2,
+    "description": "Monitor arm, dual",
+    "account": "6100",
+    "basis": "office furniture accessory, not computer hardware"
+   },
+   {
+    "line": 3,
+    "description": "Height-adjustable desk",
+    "account": "6100",
+    "basis": "office furniture"
+   }
+  ],
+  "en-009": [
+   {
+    "line": 0,
+    "description": "Delivery and assembly",
+    "account": "6100",
+    "basis": "ancillary to office furniture"
+   },
+   {
+    "line": 1,
+    "description": "Task chair, mesh back",
+    "account": "6100",
+    "basis": "office furniture"
+   },
+   {
+    "line": 2,
+    "description": "Monitor arm, dual",
+    "account": "6100",
+    "basis": "office furniture accessory, not computer hardware"
+   },
+   {
+    "line": 3,
+    "description": "Height-adjustable desk",
+    "account": "6100",
+    "basis": "office furniture"
+   }
+  ],
+  "en-010": [
+   {
+    "line": 0,
+    "description": "Storage, per pallet per week",
+    "account": null,
+    "basis": "warehousing; no chart account fits"
+   }
+  ],
+  "en-011": [
+   {
+    "line": 0,
+    "description": "Travel, per mile",
+    "account": null,
+    "basis": "travel; no chart account fits"
+   },
+   {
+    "line": 1,
+    "description": "Reporting and drawings",
+    "account": "6200",
+    "basis": "professional reporting and drawings"
+   },
+   {
+    "line": 2,
+    "description": "Soil sampling kit",
+    "account": null,
+    "basis": "field survey kit; no chart account fits"
+   }
+  ],
+  "en-012": [
+   {
+    "line": 0,
+    "description": "Floor stripping and waxing",
+    "account": null,
+    "basis": "janitorial service; no chart account fits"
+   },
+   {
+    "line": 1,
+    "description": "Monthly cleaning service, Suite 200",
+    "account": null,
+    "basis": "janitorial service; no chart account fits"
+   },
+   {
+    "line": 2,
+    "description": "Restroom supply restock",
+    "account": null,
+    "basis": "facilities consumables, not office supplies; no chart account fits"
+   }
+  ],
+  "en-013-scan": [
+   {
+    "line": 0,
+    "description": "Working lunch, per head",
+    "account": null,
+    "basis": "catering; no chart account fits"
+   },
+   {
+    "line": 1,
+    "description": "Equipment rental",
+    "account": null,
+    "basis": "event equipment rental; no chart account fits"
+   }
+  ],
+  "en-013": [
+   {
+    "line": 0,
+    "description": "Working lunch, per head",
+    "account": null,
+    "basis": "catering; no chart account fits"
+   },
+   {
+    "line": 1,
+    "description": "Equipment rental",
+    "account": null,
+    "basis": "event equipment rental; no chart account fits"
+   }
+  ],
+  "en-014-photo": [
+   {
+    "line": 0,
+    "description": "Restroom supply restock",
+    "account": null,
+    "basis": "facilities consumables, not office supplies; no chart account fits"
+   },
+   {
+    "line": 1,
+    "description": "Monthly cleaning service, Suite 200",
+    "account": null,
+    "basis": "janitorial service; no chart account fits"
+   }
+  ],
+  "en-014": [
+   {
+    "line": 0,
+    "description": "Restroom supply restock",
+    "account": null,
+    "basis": "facilities consumables, not office supplies; no chart account fits"
+   },
+   {
+    "line": 1,
+    "description": "Monthly cleaning service, Suite 200",
+    "account": null,
+    "basis": "janitorial service; no chart account fits"
+   }
+  ],
+  "en-015": [
+   {
+    "line": 0,
+    "description": "Storage, per pallet per week",
+    "account": null,
+    "basis": "warehousing; no chart account fits"
+   },
+   {
+    "line": 1,
+    "description": "Freight, LTL Savannah to Columbus",
+    "account": null,
+    "basis": "freight; no chart account fits"
+   }
+  ],
+  "en-016": [
+   {
+    "line": 0,
+    "description": "Coffee and pastry service",
+    "account": null,
+    "basis": "catering; no chart account fits"
+   },
+   {
+    "line": 1,
+    "description": "Service staff, hourly",
+    "account": null,
+    "basis": "catering staff; no chart account fits"
+   },
+   {
+    "line": 2,
+    "description": "Working lunch, per head",
+    "account": null,
+    "basis": "catering; no chart account fits"
+   },
+   {
+    "line": 3,
+    "description": "Equipment rental",
+    "account": null,
+    "basis": "event equipment rental; no chart account fits"
+   }
+  ],
+  "en-017-photo": [
+   {
+    "line": 0,
+    "description": "Vinyl banner 3x8ft",
+    "account": "6500",
+    "basis": "advertising banner"
+   },
+   {
+    "line": 1,
+    "description": "Business cards, box of 500",
+    "account": "6100",
+    "basis": "stationery"
+   },
+   {
+    "line": 2,
+    "description": "Foam board posters 24x36",
+    "account": "6500",
+    "basis": "printed display posters"
+   }
+  ],
+  "en-017": [
+   {
+    "line": 0,
+    "description": "Vinyl banner 3x8ft",
+    "account": "6500",
+    "basis": "advertising banner"
+   },
+   {
+    "line": 1,
+    "description": "Business cards, box of 500",
+    "account": "6100",
+    "basis": "stationery"
+   },
+   {
+    "line": 2,
+    "description": "Foam board posters 24x36",
+    "account": "6500",
+    "basis": "printed display posters"
+   }
+  ],
+  "en-018": [
+   {
+    "line": 0,
+    "description": "Soil sampling kit",
+    "account": null,
+    "basis": "field survey kit; no chart account fits"
+   },
+   {
+    "line": 1,
+    "description": "Reporting and drawings",
+    "account": "6200",
+    "basis": "professional reporting and drawings"
+   }
+  ],
+  "es-001": [
+   {
+    "line": 0,
+    "description": "Limpieza mensual de oficinas",
+    "account": null,
+    "basis": "janitorial service; no chart account fits"
+   },
+   {
+    "line": 1,
+    "description": "Reposición de consumibles",
+    "account": null,
+    "basis": "facilities consumables, not office supplies; no chart account fits"
+   }
+  ],
+  "es-002-scan": [
+   {
+    "line": 0,
+    "description": "Instalación de equipo",
+    "account": "6200",
+    "basis": "IT technical service labour"
+   },
+   {
+    "line": 1,
+    "description": "Soporte técnico mensual",
+    "account": "6200",
+    "basis": "IT technical support service"
+   },
+   {
+    "line": 2,
+    "description": "Licencia de antivirus, anual",
+    "account": "6100",
+    "basis": "software licence"
+   }
+  ],
+  "es-002": [
+   {
+    "line": 0,
+    "description": "Instalación de equipo",
+    "account": "6200",
+    "basis": "IT technical service labour"
+   },
+   {
+    "line": 1,
+    "description": "Soporte técnico mensual",
+    "account": "6200",
+    "basis": "IT technical support service"
+   },
+   {
+    "line": 2,
+    "description": "Licencia de antivirus, anual",
+    "account": "6100",
+    "basis": "software licence"
+   }
+  ],
+  "es-003-photo": [
+   {
+    "line": 0,
+    "description": "Carpetas archivadoras, paquete",
+    "account": "6100",
+    "basis": "office stationery (file folders)"
+   }
+  ],
+  "es-003": [
+   {
+    "line": 0,
+    "description": "Carpetas archivadoras, paquete",
+    "account": "6100",
+    "basis": "office stationery (file folders)"
+   }
+  ],
+  "es-004": [
+   {
+    "line": 0,
+    "description": "Envases reutilizables",
+    "account": null,
+    "basis": "packaging containers; no chart account fits"
+   },
+   {
+    "line": 1,
+    "description": "Aceite de oliva, caja 12 L",
+    "account": null,
+    "basis": "food goods; no chart account fits"
+   }
+  ],
+  "es-005": [
+   {
+    "line": 0,
+    "description": "Mantenimiento de servidores (hrs)",
+    "account": "6200",
+    "basis": "hourly IT technical service labour"
+   },
+   {
+    "line": 1,
+    "description": "Licencia de antivirus, anual",
+    "account": "6100",
+    "basis": "software licence"
+   },
+   {
+    "line": 2,
+    "description": "Instalación de equipo",
+    "account": "6200",
+    "basis": "IT technical service labour"
+   }
+  ],
+  "es-006": [
+   {
+    "line": 0,
+    "description": "Tornillería surtida, caja",
+    "account": null,
+    "basis": "fasteners, hardware-store goods; no chart account fits"
+   },
+   {
+    "line": 1,
+    "description": "Herramienta menor, kit",
+    "account": null,
+    "basis": "hand tools; no chart account fits"
+   },
+   {
+    "line": 2,
+    "description": "Pintura vinílica, cubeta 19 L",
+    "account": null,
+    "basis": "paint, maintenance goods; no chart account fits"
+   }
+  ],
+  "es-007-scan": [
+   {
+    "line": 0,
+    "description": "Informe ejecutivo",
+    "account": "6200",
+    "basis": "consulting report"
+   }
+  ],
+  "es-007": [
+   {
+    "line": 0,
+    "description": "Informe ejecutivo",
+    "account": "6200",
+    "basis": "consulting report"
+   }
+  ],
+  "es-008": [
+   {
+    "line": 0,
+    "description": "Transporte refrigerado",
+    "account": null,
+    "basis": "freight; no chart account fits"
+   },
+   {
+    "line": 1,
+    "description": "Envases reutilizables",
+    "account": null,
+    "basis": "packaging containers; no chart account fits"
+   },
+   {
+    "line": 2,
+    "description": "Aceite de oliva, caja 12 L",
+    "account": null,
+    "basis": "food goods; no chart account fits"
+   }
+  ],
+  "es-009": [
+   {
+    "line": 0,
+    "description": "Estadía por día",
+    "account": null,
+    "basis": "freight demurrage; no chart account fits"
+   },
+   {
+    "line": 1,
+    "description": "Maniobras de carga y descarga",
+    "account": null,
+    "basis": "freight handling; no chart account fits"
+   }
+  ],
+  "es-010": [
+   {
+    "line": 0,
+    "description": "Tornillería surtida, caja",
+    "account": null,
+    "basis": "fasteners, hardware-store goods; no chart account fits"
+   },
+   {
+    "line": 1,
+    "description": "Pintura vinílica, cubeta 19 L",
+    "account": null,
+    "basis": "paint, maintenance goods; no chart account fits"
+   },
+   {
+    "line": 2,
+    "description": "Cable calibre 12, rollo 100 m",
+    "account": null,
+    "basis": "electrical cable, hardware-store goods; no chart account fits"
+   }
+  ],
+  "es-011-photo": [
+   {
+    "line": 0,
+    "description": "Folletos A5 a color, millar",
+    "account": "6500",
+    "basis": "printed brochures"
+   },
+   {
+    "line": 1,
+    "description": "Lonas publicitarias 2x1 m",
+    "account": "6500",
+    "basis": "advertising banners"
+   }
+  ],
+  "es-011": [
+   {
+    "line": 0,
+    "description": "Folletos A5 a color, millar",
+    "account": "6500",
+    "basis": "printed brochures"
+   },
+   {
+    "line": 1,
+    "description": "Lonas publicitarias 2x1 m",
+    "account": "6500",
+    "basis": "advertising banners"
+   }
+  ],
+  "es-012": [
+   {
+    "line": 0,
+    "description": "Carpetas archivadoras, paquete",
+    "account": "6100",
+    "basis": "office stationery (file folders)"
+   },
+   {
+    "line": 1,
+    "description": "Marcadores surtidos, caja",
+    "account": "6100",
+    "basis": "office stationery (markers)"
+   }
+  ]
+ }
+}
