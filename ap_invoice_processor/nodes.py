@@ -10,6 +10,7 @@ from google.adk.agents.context import Context
 from google.adk.workflow import node
 
 from ap_invoice_processor.models import InvoiceState, DecisionStep, LineItem
+from ap_invoice_processor.keyword_coder import keyword_code, match_vendor
 from ap_invoice_processor.skill_loader import load_skill_rules
 from mcp_server.netsuite_mcp_client import post_invoice_sync
 
@@ -119,45 +120,13 @@ def gl_coder_node(ctx: Context, node_input: Any) -> Event:
     skill_rules = load_skill_rules()
     vendor_master = _load_json_data("vendor_master.json")
 
-    vendor_name_clean = (invoice_state.extracted_fields.vendor_name or "").lower()
-    matched_vendor_entry = None
-    if isinstance(vendor_master, list):
-        for vm in vendor_master:
-            if vm["name"].lower() in vendor_name_clean or any(alias.lower() in vendor_name_clean for alias in vm.get("aliases", [])):
-                matched_vendor_entry = vm
-                break
+    matched_vendor_entry = match_vendor(invoice_state.extracted_fields.vendor_name, vendor_master)
 
     coded_count = 0
     for item in invoice_state.extracted_fields.line_items:
-        gl = None
-        gl_name = None
-        dept = None
-
-        if matched_vendor_entry:
-            gl = matched_vendor_entry.get("default_gl_account")
-            dept = matched_vendor_entry.get("default_department")
-
-        if not gl:
-            for rule in skill_rules.vendor_mappings:
-                if any(kw in vendor_name_clean for kw in rule["keywords"]):
-                    gl = rule["gl"]
-                    gl_name = rule["gl_name"]
-                    dept = rule["department"]
-                    break
-
-        if not gl:
-            desc_clean = item.description.lower()
-            for fb in skill_rules.fallback_keywords:
-                if any(kw in desc_clean for kw in fb["keywords"]):
-                    gl = fb["gl"]
-                    gl_name = fb["gl_name"]
-                    dept = fb["department"]
-                    break
-
-        if not gl:
-            gl = "6100"
-            gl_name = "Office Supplies & Software (Fallback)"
-            dept = "Administration"
+        gl, gl_name, dept, _rule = keyword_code(
+            invoice_state.extracted_fields.vendor_name, item.description, matched_vendor_entry, skill_rules
+        )
 
         item.gl_account = gl
         item.gl_account_name = gl_name
