@@ -46,7 +46,7 @@ pipeline module names or opens ground truth or labels.
   in their own row ("unscorable (no fitting account)"). A line that fell back to the keyword coder is counted and
   listed, not scored; the keyword coder's own result against the labels is deliberately not computed, and the
   fallback record in the JSON carries no `got` (only `expected` and `fallback: true`). GL results are printed as
-  counts only (for example "47/56 scorable lines matched"), never as percentages, in stdout, the `.txt` file and the
+  counts only (for example "N/M scorable lines matched"), never as percentages, in stdout, the `.txt` file and the
   `.json` file; extraction keeps its rates.
 
 ## Disclosure
