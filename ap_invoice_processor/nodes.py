@@ -10,6 +10,7 @@ from google.adk.agents.context import Context
 from google.adk.workflow import node
 
 from ap_invoice_processor.models import InvoiceState, DecisionStep, LineItem
+from ap_invoice_processor.document_intake import fill_state_from_document
 from ap_invoice_processor.keyword_coder import keyword_code, match_vendor
 from ap_invoice_processor.skill_loader import load_skill_rules
 from mcp_server.netsuite_mcp_client import post_invoice_sync
@@ -43,6 +44,7 @@ def _parse_input_to_dict(node_input: Any) -> dict:
 def intake_node(ctx: Context, node_input: Any) -> Event:
     """Intake node: pulls raw invoice payload and initializes normalized shared state."""
     payload = _parse_input_to_dict(node_input)
+    document_path = payload.get("document_path") if payload else None
     
     if payload and "id" in payload:
         invoice_id = payload.get("id")
@@ -58,6 +60,15 @@ def intake_node(ctx: Context, node_input: Any) -> Event:
         raw_text=raw_text
     )
 
+    doc_summary = None
+    if document_path:
+        # A document payload is read and extracted through the configured LLM provider. Any simulated
+        # extraction in the same payload is ignored so the two sources never mix.
+        extracted_sim = {}
+        doc_summary = fill_state_from_document(invoice_state, document_path)
+        if not (payload and "id" in payload):
+            invoice_state.invoice_id = invoice_id = doc_summary["doc_id"]
+
     if extracted_sim:
         for k, v in extracted_sim.items():
             if k == "line_items":
@@ -68,14 +79,24 @@ def intake_node(ctx: Context, node_input: Any) -> Event:
             elif hasattr(invoice_state.extracted_fields, k):
                 setattr(invoice_state.extracted_fields, k, v)
 
-    step = DecisionStep(
-        step_index=len(invoice_state.decision_trail) + 1,
-        node_name="Intake",
-        action="Pull & Normalize Raw Invoice",
-        reasoning=f"Successfully ingested raw invoice payload for ID {invoice_id}.",
-        confidence=1.0,
-        output_summary={"invoice_id": invoice_id, "raw_length": len(raw_text)}
-    )
+    if doc_summary is not None:
+        step = DecisionStep(
+            step_index=len(invoice_state.decision_trail) + 1,
+            node_name="Intake",
+            action="Read Document & Extract Fields via LLM Provider",
+            reasoning=f"Read document for ID {invoice_id}; extraction result: {doc_summary['extraction']}.",
+            confidence=1.0 if doc_summary["extraction"] == "ok" else 0.0,
+            output_summary={"invoice_id": invoice_id, "raw_length": len(invoice_state.raw_text), **doc_summary}
+        )
+    else:
+        step = DecisionStep(
+            step_index=len(invoice_state.decision_trail) + 1,
+            node_name="Intake",
+            action="Pull & Normalize Raw Invoice",
+            reasoning=f"Successfully ingested raw invoice payload for ID {invoice_id}.",
+            confidence=1.0,
+            output_summary={"invoice_id": invoice_id, "raw_length": len(raw_text)}
+        )
     invoice_state.decision_trail.append(step)
 
     state_dict = invoice_state.model_dump()
