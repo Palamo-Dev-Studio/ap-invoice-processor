@@ -156,6 +156,28 @@ PYTHONPATH=. pytest tests/
 
 ---
 
+## 📄 Optional Document Intake Path (reader → LLM extraction → LLM GL coder)
+
+Besides the simulated-extraction payloads above, the graph accepts a payload with a `document_path` (a PDF or image of an invoice). Payloads without `document_path` behave exactly as before.
+
+1. **Reader** (`ap_invoice_processor/reader.py`): turns the document into text with `pdftotext`, or Tesseract OCR for scans and photos (needs `pdftotext`, `pdftoppm` and `tesseract` on `PATH`; no network).
+2. **Extraction** (`ap_invoice_processor/llm/extraction.py`): the reader text goes to the configured LLM provider, which returns structured invoice fields. Field confidence on this path is presence-based (1.0 if the extraction returned a value, 0.0 if it left the field empty), not a model confidence. A document that cannot be read or extracted leaves empty fields at zero confidence, so the validator routes it to a human.
+3. **GL coder** (`ap_invoice_processor/llm/gl.py`): each line is coded against the chart of accounts. A line the provider cannot code validly (off-chart account, malformed or missing entry) falls back to the keyword coder, and the decision trail records per line which coder answered (`source`: `llm` or `keyword_fallback`) and why.
+
+**Provider.** `AP_LLM_PROVIDER` selects it: `fixture` (the default) serves hand-authored responses from `tests/fixtures/llm/`; `anthropic` is a stub that raises `NotImplementedError` until a provider, API key and spend cap are approved. Nothing in this path makes a live LLM call today. The web dashboard does not surface `document_path` yet.
+
+**Synthetic corpus.** `data/corpus/` holds synthetic invoices (English and Spanish; PDFs plus scan and photo variants) with ground truth. See `data/corpus/README.md`; Spanish scans are OCR'd with English language data only.
+
+**Offline eval.** `eval/extraction_eval.py` runs the path end to end over the corpus and scores it against ground truth:
+
+```bash
+PYTHONPATH=. python eval/extraction_eval.py
+```
+
+This is a plumbing check, not a model evaluation: the fixtures are hand-authored from reader text and no model runs, so its numbers are not model accuracy and must not be quoted as such. Details: [`eval/README_extraction_eval.md`](eval/README_extraction_eval.md).
+
+---
+
 ## 📂 Repository Structure
 
 ```text
