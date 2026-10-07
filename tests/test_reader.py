@@ -3,6 +3,7 @@
 import glob
 import json
 import os
+import shutil
 import subprocess
 from decimal import Decimal
 
@@ -10,6 +11,11 @@ import pytest
 
 from ap_invoice_processor import reader
 from ap_invoice_processor.reader import ReaderError, read_document
+
+needs_binaries = pytest.mark.skipif(
+    not (shutil.which("pdftotext") and shutil.which("tesseract") and shutil.which("pdftoppm")),
+    reason="poppler-utils/tesseract not installed",
+)
 
 CORPUS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "corpus")
 GT_FILES = sorted(glob.glob(os.path.join(CORPUS, "ground_truth", "*.json")))
@@ -26,6 +32,7 @@ def test_corpus_present():
     assert len(GT_FILES) >= 40
 
 
+@needs_binaries
 @pytest.mark.parametrize("doc_id", PDF_IDS)
 def test_pdf_text_contains_vendor_and_total(doc_id):
     gt = _gt(doc_id)
@@ -41,6 +48,7 @@ def test_pdf_text_contains_vendor_and_total(doc_id):
 IMAGE_IDS = sorted(os.path.splitext(os.path.basename(p))[0] for p in glob.glob(os.path.join(CORPUS, "images", "*.png")))
 
 
+@needs_binaries
 @pytest.mark.parametrize("doc_id", IMAGE_IDS)
 def test_image_variant_ocr_recovers_invoice_number_and_total(doc_id):
     # Covers all layouts: the twocol sidebar is lost by Tesseract's default thresholding alone.
@@ -77,6 +85,7 @@ def test_tesseract_argv_is_english_and_runs_both_thresholding_modes(monkeypatch)
     assert text == "out1\nout2"
 
 
+@needs_binaries
 def test_empty_pdf_text_falls_back_to_ocr(monkeypatch):
     gt = _gt("en-001")
     monkeypatch.setattr(reader, "_pdf_text", lambda path: "  \n")
