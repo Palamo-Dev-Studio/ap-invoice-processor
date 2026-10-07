@@ -68,6 +68,17 @@ from the line descriptions before any coder or fixture for them existed; no code
 they are one reader's reading of a small chart, not an audited standard. An image variant carries the same
 lines as its base document, so its labels repeat.
 
+## LLM fixtures
+
+`tests/fixtures/llm/extract/<doc_id>.json` and `tests/fixtures/llm/gl/<doc_id>.json` hold hand-authored model
+responses for all 40 documents; `tests/fixtures/reader_text/<doc_id>.txt` is the reader output each was authored
+from (one file per document, so a reviewer can audit the pairing). Each fixture carries
+`"_authored_from": "reader_text"`: it was written by reading that text, not by copying the ground-truth JSON, and
+where the OCR text is damaged the fixture reflects the damage (a fixture with `_damage_note` says how). Eight
+extraction fixtures are of that kind (`en-004-scan`, `en-005-scan`, `en-014-photo`, `en-017-photo`,
+`es-002-scan`, `es-003-photo`, `es-007-scan`, `es-011-photo`). The fixtures show what the pipeline does with a
+plausible response; they are not recorded from a live model and say nothing about how a live model would perform.
+
 ## Regenerate
 
 ```
