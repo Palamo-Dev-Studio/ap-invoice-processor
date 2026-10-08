@@ -72,9 +72,11 @@ def test_extraction_fixture_validates_and_is_marked_as_authored_from_reader_text
 @pytest.mark.skipif(not (shutil.which("pdftotext") and shutil.which("tesseract")), reason="reader binaries not installed")
 @pytest.mark.parametrize("doc_id", DOC_IDS)
 def test_saved_reader_text_matches_the_live_reader(doc_id):
+    # The saved text, and the fixtures authored from it, come from English-only OCR; the reader's default now also
+    # loads Spanish, so this check pins the English-only reading explicitly.
     kind = "images" if re.search(r"-(scan|photo)$", doc_id) else "pdf"
     ext = "png" if kind == "images" else "pdf"
-    live = read_document(os.path.join(CORPUS, kind, f"{doc_id}.{ext}"))
+    live = read_document(os.path.join(CORPUS, kind, f"{doc_id}.{ext}"), ocr_langs="eng")
     assert live.text == _reader_output(doc_id).text
 
 

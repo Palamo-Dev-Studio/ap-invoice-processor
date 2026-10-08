@@ -30,7 +30,7 @@ BANNER = (
     "PLUMBING CHECK — offline, fixture-backed. Fixtures are hand-authored from reader text; no model ran. "
     "These numbers validate the scoring pipeline and wiring only and are NOT model accuracy. "
     "GL fixture/label agreement is not independent (same author). "
-    "Spanish scans/photos OCR'd with -l eng."
+    "Fixtures were authored from reader text of Spanish scans/photos OCR'd with -l eng; the reader now defaults to eng+spa."
 )
 
 
