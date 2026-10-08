@@ -156,6 +156,19 @@ def test_ocr_damaged_fixtures_reflect_the_damage():
         assert getattr(extract_invoice(_reader_output(doc_id), PROVIDER), field) == value
 
 
+def test_es_003_photo_documents_the_quantity_the_ocr_read_two_ways():
+    # The saved reader text is two OCR passes joined (default, then Sauvola). The first read the quantity as 2 and the
+    # second as 22; the fixture takes 22, the only reading that agrees with the unit price and the line amount.
+    text = _reader_output("es-003-photo").text
+    assert "paquete 2 $14.42 $317.24" in text and "paquete 22 $14.42 $317.24" in text
+    (item,) = _fixture("es-003-photo")["line_items"]
+    assert item["quantity"] == 22 and round(22 * item["unit_price"], 2) == item["amount"] != round(2 * item["unit_price"], 2)
+    note = _fixture("es-003-photo")["_damage_note"]
+    assert "accent damage in the vendor name" in note
+    assert "quantity" in note and "2 " in note and "22" in note and "noise" in note
+    assert extract_invoice(_reader_output("es-003-photo"), PROVIDER).line_items[0].quantity == 22
+
+
 def test_european_and_textual_formats_in_fixtures_are_coerced():
     es4 = extract_invoice(_reader_output("es-004"), PROVIDER)
     assert es4.line_items[1].amount == pytest.approx(1437.12)
