@@ -132,11 +132,28 @@ def test_unreadable_document_is_recorded_not_raised(tmp_path):
 
 
 @needs_pdftotext
-def test_live_provider_stub_surfaces_as_an_error_not_a_silent_fallback(monkeypatch):
+def test_a_misconfigured_live_provider_surfaces_as_an_error_not_a_silent_fallback(monkeypatch, tmp_path):
     monkeypatch.setenv("AP_LLM_PROVIDER", "anthropic")
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
-    with pytest.raises(NotImplementedError):
+    monkeypatch.setenv("AP_INTAKE_ENV_FILE", str(tmp_path / "absent.env"))
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("AP_LLM_SPEND_CAP_USD", raising=False)
+    with pytest.raises(ValueError, match="ANTHROPIC_API_KEY"):
         intake_node._func(DummyContext(), {"id": "INV-DOC-4", "document_path": PDF})
+
+
+@needs_pdftotext
+@pytest.mark.parametrize("total, expected_confidence", [(0, 0.0), (0.0, 0.0), (985.84, 1.0)])
+def test_a_total_of_zero_is_low_confidence_so_the_validator_sends_it_to_a_human(total, expected_confidence):
+    class FixedTotalProvider:
+        def complete(self, task, prompt, doc_id):
+            return {
+                "vendor_name": "V", "invoice_number": "N", "total": total,
+                "line_items": [{"description": "Thing", "quantity": 1, "unit_price": 5, "amount": 5}],
+            }
+
+    state = InvoiceState(invoice_id="x")
+    fill_state_from_document(state, PDF, FixedTotalProvider())
+    assert state.field_confidence.total_amount == expected_confidence
 
 
 @needs_pdftotext

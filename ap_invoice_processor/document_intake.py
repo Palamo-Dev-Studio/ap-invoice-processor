@@ -15,7 +15,8 @@ def fill_state_from_document(
     """Read `document_path`, extract fields, and write them into `invoice_state`.
 
     Returns a summary dict for the decision trail (its `doc_id` is the document's file stem). Field confidence is 1.0 for a field the extraction returned and
-    0.0 for one it left null (or for everything when reading or extraction failed); no model confidence is available.
+    0.0 for one it left null or, for the total, returned as zero (or for everything when reading or extraction failed);
+    no model confidence is available.
     """
     provider = provider or get_provider()
     summary: Dict[str, Any] = {
@@ -58,7 +59,7 @@ def fill_state_from_document(
         vendor_name=1.0 if extracted.vendor_name else 0.0,
         invoice_number=1.0 if extracted.invoice_number else 0.0,
         date=1.0 if extracted.invoice_date else 0.0,
-        total_amount=1.0,
+        total_amount=1.0 if extracted.total else 0.0,
         line_items=1.0 if line_items else 0.0,
     )
     summary.update(extraction="ok", line_items=len(line_items))
