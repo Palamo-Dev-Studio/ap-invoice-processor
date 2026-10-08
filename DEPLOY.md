@@ -7,7 +7,7 @@ Target: project `palamo-demos`, region `us-west1`, service `ap-copilot-demo`. Ac
 ## What you are deploying
 
 - The dashboard (`web/server.py`) with `AP_DEMO_MODE=1`: no cost/ROI banner, and the fixed notice "Test build · synthetic data only · results are not financial advice".
-- The document path: a visitor uploads a PDF/PNG/JPEG (max 5 MB) or picks a synthetic corpus sample, and sees reader, LLM extraction, GL coding with reasons, validation, the Human Gate and the decision trail. Uploaded files live in a private temp dir and are deleted as soon as the Intake node has read them.
+- The document path: a visitor uploads a PDF/PNG/JPEG (max 5 MB; a PDF of at most 10 pages, an image of at most 40 megapixels) or picks a synthetic corpus sample, and sees reader, LLM extraction, GL coding with reasons, validation, the Human Gate and the decision trail. Uploaded files live in a private temp dir and are deleted as soon as the Intake node has read them.
 - Live extraction and GL coding with Claude Haiku 5.5 (`claude-haiku-5-5`), through the key mounted from Secret Manager.
 
 ## Spend protection: read this before deploying
@@ -22,7 +22,7 @@ There are three layers. Only the last one is a cross-instance stop.
 
 Facts about the Anthropic limit, from the rate-limits page: spend limits are monthly; a limit you set is set on the Billing page; when a workspace limit is reached, requests return HTTP 400 `invalid_request_error` ("You have reached your specified workspace API usage limits"); and **limits cannot be set on the default Workspace**. So the key in Secret Manager must belong to a non-default workspace that carries the $10 limit. The app treats that 400 as a failed call (empty fields, human review), never as a value.
 
-Per-request guards in the app: one document per request (a second file or extra field is refused with 400), at most `AP_MAX_CONCURRENT_UPLOADS` (default 2) documents processing at once (429 beyond that), and a fixed call path of one extraction call plus one GL call per document with no loop.
+Per-request guards in the app: one document per request (a second file or extra field is refused with 400), at most `AP_MAX_CONCURRENT_UPLOADS` (default 2) documents processing at once (429 beyond that), a PDF of more than `AP_MAX_PDF_PAGES` pages (default 10, set to 10 in the image) or an image of more than 40 megapixels refused with 413 before any OCR, scanned pages rasterised no larger than 2500 pixels on the long edge (so a PDF that declares a 200-inch page cannot exhaust the 2 Gi instance and reset the ledger), and a fixed call path of one extraction call plus one GL call per document with no loop. Each workflow run executes on a worker thread, so a long OCR job does not stop the dashboard from answering polls.
 
 ## 0. Before you start (Hector, once)
 
@@ -203,6 +203,22 @@ gcloud run services update "$SERVICE" --project="$PROJECT" --region="$REGION" \
 
 To stop the demo: remove access first, then the service, then the key.
 
+Remove the two IAP accessor bindings (the same two testers as step 5; the `--resource-type`, `--region` and `--service` flags match `add-iam-policy-binding`):
+
+```bash
+for USER_EMAIL in halamo@palamo.ai rpalma@palamo.ai; do
+  gcloud iap web remove-iam-policy-binding \
+    --project="$PROJECT" \
+    --member="user:${USER_EMAIL}" \
+    --role="roles/iap.httpsResourceAccessor" \
+    --region="$REGION" \
+    --resource-type=cloud-run \
+    --service="$SERVICE"
+done
+```
+
+Then delete the service (this also removes its `roles/run.invoker` binding for the IAP service agent) and the secret:
+
 ```bash
 gcloud run services delete "$SERVICE" --project="$PROJECT" --region="$REGION"
 gcloud secrets delete "$SECRET" --project="$PROJECT"
@@ -218,9 +234,9 @@ Also delete the API key (or the whole demo workspace) in the Claude Console; del
 
 ## Sources (checked 2026-10-07)
 
-- IAP for Cloud Run (enable with `gcloud run deploy --iap`, service-agent invoker binding, `gcloud iap web add-iam-policy-binding ... --resource-type=cloud-run`, projects without an organization, troubleshooting): https://docs.cloud.google.com/run/docs/securing/identity-aware-proxy-cloud-run
+- IAP for Cloud Run (enable with `gcloud run deploy --iap`, service-agent invoker binding, `gcloud iap web add-iam-policy-binding` and `remove-iam-policy-binding ... --resource-type=cloud-run`, projects without an organization, troubleshooting): https://docs.cloud.google.com/run/docs/securing/identity-aware-proxy-cloud-run
 - IAP service agent creation (`gcloud services identity create --service=iap.googleapis.com`): https://docs.cloud.google.com/iap/docs/enabling-cloud-run
 - Cloud Run secrets (`--set-secrets`, `roles/secretmanager.secretAccessor`, pin versions for env vars): https://docs.cloud.google.com/run/docs/configuring/services/secrets
 - Cloud Run source deploys (Dockerfile build, `cloud-run-source-deploy` repository, deployer and builder roles): https://docs.cloud.google.com/run/docs/deploying-source-code
 - Anthropic spend limits (monthly, workspace limit returns 400, no limits on the default workspace): https://platform.claude.com/docs/en/api/rate-limits
-- Local checks: `gcloud run deploy --help` (flags `--[no-]iap`, `--[no-]allow-unauthenticated`, `--[no-]cpu-throttling`, `--[no-]cpu-boost`, `--set-secrets`), `gcloud secrets create --help` (`--data-file=-` reads stdin), `gcloud iap web add-iam-policy-binding --help` (`--resource-type`, `--region`, `--service`), gcloud 562.0.0.
+- Local checks: `gcloud run deploy --help` (flags `--[no-]iap`, `--[no-]allow-unauthenticated`, `--[no-]cpu-throttling`, `--[no-]cpu-boost`, `--set-secrets`), `gcloud secrets create --help` (`--data-file=-` reads stdin), `gcloud iap web add-iam-policy-binding --help` and `remove-iam-policy-binding --help` (`--resource-type`, `--region`, `--service`), gcloud 562.0.0.

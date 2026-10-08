@@ -5,12 +5,14 @@ import stat
 
 import pytest
 
+from ap_invoice_processor import reader
+from document_builders import jpeg_header, png_header
 from web import uploads
 from web.uploads import MAX_UPLOAD_BYTES, UploadRejected
 
 PDF_BYTES = b"%PDF-1.4\n" + b"x" * 64
-PNG_BYTES = b"\x89PNG\r\n\x1a\n" + b"x" * 64
-JPEG_BYTES = b"\xff\xd8\xff\xe0" + b"x" * 64
+PNG_BYTES = png_header(100, 100)
+JPEG_BYTES = jpeg_header(100, 100)
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CORPUS = os.path.join(ROOT, "data", "corpus")
 
@@ -194,3 +196,97 @@ def test_a_sample_id_that_is_not_listed_is_refused(sample_id, private_tmp):
         uploads.stage_sample(CORPUS, sample_id)
     assert err.value.status_code == 404
     assert os.listdir(private_tmp) == []
+
+
+# --- image pixel ceiling -----------------------------------------------------------------------------------------------
+
+
+def test_the_pixel_ceiling_is_forty_megapixels():
+    assert uploads.MAX_IMAGE_PIXELS == 40_000_000
+
+
+@pytest.mark.parametrize(
+    "filename,build",
+    [
+        ("a.png", png_header),
+        ("a.jpg", jpeg_header),
+        ("a.jpeg", lambda w, h: jpeg_header(w, h, progressive=True)),
+        ("a.jpg", lambda w, h: jpeg_header(w, h, leading_segments=6)),
+    ],
+)
+def test_an_image_of_exactly_forty_megapixels_is_accepted_and_one_more_pixel_is_not(filename, build):
+    assert uploads.validate_document(filename, build(8000, 5000))
+    assert uploads.validate_document(filename, build(5000, 8000))
+    # A JPEG dimension is 16 bits, so its extreme cases are 65535 pixels along one edge.
+    extremes = ((40_000_001, 1), (1, 40_000_001)) if filename.endswith("png") else ((65535, 611), (611, 65535))
+    for width, height in extremes + ((8001, 5000), (5000, 8001)):
+        with pytest.raises(UploadRejected) as err:
+            uploads.validate_document(filename, build(width, height))
+        assert err.value.status_code == 413
+        assert "40" in err.value.detail and "megapixel" in err.value.detail
+
+
+def test_one_long_edge_alone_is_not_enough_to_trip_the_ceiling():
+    assert uploads.validate_document("a.png", png_header(30_000, 1_000))
+
+
+@pytest.mark.parametrize(
+    "filename,data",
+    [
+        ("a.png", b"\x89PNG\r\n\x1a\n" + b"x" * 64),  # signature but no IHDR chunk
+        ("a.png", b"\x89PNG\r\n\x1a\n"),  # truncated
+        ("a.png", png_header(0, 100)),  # a zero dimension is not an image
+        ("a.jpg", b"\xff\xd8\xff\xe0" + b"x" * 64),  # no frame header
+        ("a.jpg", b"\xff\xd8\xff"),  # truncated
+        ("a.jpg", jpeg_header(100, 100)[:12]),  # cut off inside the first segment
+    ],
+)
+def test_an_image_whose_size_cannot_be_read_is_refused_rather_than_trusted(filename, data):
+    with pytest.raises(UploadRejected) as err:
+        uploads.validate_document(filename, data)
+    assert err.value.status_code == 415
+
+
+def test_an_oversized_image_leaves_nothing_on_disk(private_tmp):
+    with pytest.raises(UploadRejected):
+        uploads.stage_document("huge.png", png_header(10_000, 10_000))
+    assert os.listdir(private_tmp) == []
+
+
+# --- PDF page cap -----------------------------------------------------------------------------------------------------
+
+
+def _pages(monkeypatch, count):
+    monkeypatch.setattr(uploads, "pdf_info", lambda path, last_page: reader.PdfInfo(pages=count, longest_edge_pts=792))
+
+
+def test_the_default_page_cap_is_ten(monkeypatch):
+    monkeypatch.delenv(reader.MAX_PDF_PAGES_ENV, raising=False)
+    assert uploads.DEFAULT_MAX_PDF_PAGES == 10
+    _pages(monkeypatch, 10)
+    uploads.check_pdf_page_limit("x.pdf")
+    _pages(monkeypatch, 11)
+    with pytest.raises(UploadRejected) as err:
+        uploads.check_pdf_page_limit("x.pdf")
+    assert err.value.status_code == 413
+    assert "11 pages" in err.value.detail and "10" in err.value.detail
+
+
+def test_the_page_cap_follows_ap_max_pdf_pages(monkeypatch):
+    monkeypatch.setenv(reader.MAX_PDF_PAGES_ENV, "3")
+    _pages(monkeypatch, 3)
+    uploads.check_pdf_page_limit("x.pdf")
+    _pages(monkeypatch, 4)
+    with pytest.raises(UploadRejected, match="limit is 3"):
+        uploads.check_pdf_page_limit("x.pdf")
+    monkeypatch.setenv(reader.MAX_PDF_PAGES_ENV, "40")
+    _pages(monkeypatch, 40)
+    uploads.check_pdf_page_limit("x.pdf")
+
+
+def test_a_pdf_pdfinfo_cannot_read_is_left_to_the_reader_which_refuses_it(monkeypatch):
+    def unreadable(path, last_page):
+        raise reader.ReaderError("pdfinfo exited with code 1")
+
+    monkeypatch.setattr(uploads, "pdf_info", unreadable)
+    uploads.check_pdf_page_limit("x.pdf")

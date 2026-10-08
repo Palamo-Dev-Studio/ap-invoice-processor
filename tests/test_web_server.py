@@ -7,15 +7,18 @@ import logging
 import os
 import re
 import shutil
+import threading
 import time
 
 import httpx2
 import pytest
 from fastapi.testclient import TestClient
 
+from ap_invoice_processor import reader
 from ap_invoice_processor.llm import anthropic_provider
 from ap_invoice_processor.llm.provider import FixtureProvider
-from web import server
+from document_builders import make_pdf, png_header
+from web import server, uploads
 from web.presentation import DEMO_NOTICE
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -346,11 +349,12 @@ def test_one_document_drives_at_most_one_extraction_and_one_gl_call(client, stag
 
 def test_a_busy_instance_refuses_another_document_with_429_and_frees_the_slot_afterwards(client, staging, monkeypatch):
     monkeypatch.setenv("AP_MAX_CONCURRENT_UPLOADS", "1")
-    release = {}
+    release = threading.Event()
 
     async def held_leg(session_id, adk_session_id, new_msg=None):
-        release["event"] = release.get("event") or asyncio.Event()
-        await release["event"].wait()
+        # The leg runs on a worker thread's own loop, so it waits on a thread-safe flag.
+        while not release.is_set():
+            await asyncio.sleep(0.01)
 
     monkeypatch.setattr(server, "_run_workflow_leg", held_leg)
     first = _upload(client, "a.pdf", PDF_BYTES, "application/pdf")
@@ -364,7 +368,7 @@ def test_a_busy_instance_refuses_another_document_with_429_and_frees_the_slot_af
     assert sample.status_code == 429
     assert len(os.listdir(staging)) == 1, "a refused document must not stay on disk"
 
-    client.portal.call(release["event"].set)
+    release.set()
     deadline = time.time() + 10
     while server._documents_in_flight and time.time() < deadline:
         time.sleep(0.05)
@@ -427,3 +431,134 @@ def test_a_missing_key_is_reported_without_echoing_any_secret(client, staging, m
     assert state["status"] == "error"
     assert "ANTHROPIC_API_KEY is not set" in state["error_message"]
     assert os.listdir(staging) == []
+
+
+# --- document limits ---------------------------------------------------------------------------------------------------
+
+needs_pdfinfo = pytest.mark.skipif(shutil.which("pdfinfo") is None, reason="pdfinfo not installed")
+
+
+def _no_staged_files_or_slots(staging):
+    assert os.listdir(staging) == []
+    assert server._documents_in_flight == 0
+
+
+def test_an_upload_over_the_default_page_cap_is_refused_with_a_clear_message_and_leaves_nothing(client, staging, monkeypatch):
+    monkeypatch.setattr(uploads, "pdf_info", lambda path, last_page: reader.PdfInfo(pages=11, longest_edge_pts=792))
+    response = _upload(client, "big.pdf", PDF_BYTES, "application/pdf")
+    assert response.status_code == 413
+    assert "11 pages" in response.json()["detail"] and "10" in response.json()["detail"]
+    _no_staged_files_or_slots(staging)
+
+
+def test_a_sample_goes_through_the_same_page_check(client, staging, monkeypatch):
+    monkeypatch.setattr(uploads, "pdf_info", lambda path, last_page: reader.PdfInfo(pages=99, longest_edge_pts=792))
+    response = client.post("/api/run-sample", json={"sample_id": "en-001.pdf"})
+    assert response.status_code == 413
+    _no_staged_files_or_slots(staging)
+
+
+def test_a_refused_page_count_does_not_use_up_a_slot(client, staging, monkeypatch):
+    monkeypatch.setenv("AP_MAX_CONCURRENT_UPLOADS", "1")
+    monkeypatch.setattr(uploads, "pdf_info", lambda path, last_page: reader.PdfInfo(pages=11, longest_edge_pts=792))
+    for _ in range(3):
+        assert _upload(client, "big.pdf", PDF_BYTES, "application/pdf").status_code == 413
+    assert server._documents_in_flight == 0
+
+
+@needs_pdfinfo
+def test_a_real_eleven_page_pdf_is_refused_and_ten_pages_are_accepted(client, staging):
+    refused = _upload(client, "eleven.pdf", make_pdf(pages=11), "application/pdf")
+    assert refused.status_code == 413 and "11 pages" in refused.json()["detail"]
+    _no_staged_files_or_slots(staging)
+    accepted = _upload(client, "ten.pdf", make_pdf(pages=10), "application/pdf")
+    assert accepted.status_code == 200
+    _wait_for(client, accepted.json()["session_id"], {"paused", "completed", "error"})
+
+
+@needs_pdfinfo
+def test_the_page_cap_follows_the_environment_in_the_web_layer(client, staging, monkeypatch):
+    monkeypatch.setenv("AP_MAX_PDF_PAGES", "2")
+    assert _upload(client, "three.pdf", make_pdf(pages=3), "application/pdf").status_code == 413
+    ok = _upload(client, "two.pdf", make_pdf(pages=2), "application/pdf")
+    assert ok.status_code == 200
+    _wait_for(client, ok.json()["session_id"], {"paused", "completed", "error"})
+
+
+def test_an_image_over_forty_megapixels_is_refused_before_any_staging(client, staging):
+    response = _upload(client, "huge.png", png_header(10_000, 5_000), "image/png")
+    assert response.status_code == 413
+    assert "megapixel" in response.json()["detail"]
+    _no_staged_files_or_slots(staging)
+
+
+# --- the event loop stays free while a document is processed -------------------------------------------------------------
+
+
+def test_polling_stays_responsive_while_a_slow_document_run_blocks_its_own_thread(client, staging, monkeypatch):
+    """A sync workflow node (OCR, the model call) blocks whatever thread runs it; that must not be the server's loop."""
+    started = threading.Event()
+    finished = threading.Event()
+    seen = {}
+
+    async def blocking_leg(session_id, adk_session_id, new_msg=None):
+        seen["thread"] = threading.get_ident()
+        started.set()
+        time.sleep(2.5)  # blocks this thread's loop, as the reader's subprocess calls do
+        finished.set()
+
+    monkeypatch.setattr(server, "_run_workflow_leg", blocking_leg)
+    server_thread = client.portal.call(threading.get_ident)
+    response = _upload(client, "slow.pdf", PDF_BYTES, "application/pdf")
+    assert response.status_code == 200
+    session_id = response.json()["session_id"]
+    assert started.wait(5)
+
+    began = time.monotonic()
+    poll = client.get(f"/api/sessions/{session_id}")
+    other = client.get("/api/config")
+    elapsed = time.monotonic() - began
+    assert poll.status_code == 200 and other.status_code == 200
+    assert not finished.is_set(), "the run ended before the poll was answered, so this proved nothing"
+    assert elapsed < 1.0, f"polling took {elapsed:.2f}s while a document run was blocked"
+    assert seen["thread"] != server_thread, "the workflow ran on the server's event loop thread"
+
+    assert finished.wait(10)
+    deadline = time.time() + 10
+    while server._documents_in_flight and time.time() < deadline:
+        time.sleep(0.05)
+    _no_staged_files_or_slots(staging)
+
+
+def test_the_slot_and_file_are_released_when_a_worker_thread_leg_raises(client, staging, monkeypatch):
+    async def exploding_leg(session_id, adk_session_id, new_msg=None):
+        raise RuntimeError("worker blew up")
+
+    monkeypatch.setattr(server, "_run_workflow_leg", exploding_leg)
+    assert _upload(client, "boom.pdf", PDF_BYTES, "application/pdf").status_code == 200
+    deadline = time.time() + 10
+    while server._documents_in_flight and time.time() < deadline:
+        time.sleep(0.05)
+    _no_staged_files_or_slots(staging)
+
+
+def _blocked_while_session_lock_is_held(action):
+    """True if `action` (run on another thread) waits for the session lock and finishes once it is released."""
+    done = threading.Event()
+    worker = threading.Thread(target=lambda: (action(), done.set()))
+    with server._SESSION_LOCK:
+        worker.start()
+        blocked = not done.wait(0.3)
+    worker.join(5)
+    return blocked and done.is_set()
+
+
+def test_session_state_is_read_under_the_session_lock(client, monkeypatch):
+    monkeypatch.setitem(server.ACTIVE_SESSIONS, "sess_lock", {"session_id": "sess_lock", "status": "running"})
+    assert _blocked_while_session_lock_is_held(lambda: client.get("/api/sessions/sess_lock"))
+
+
+def test_session_state_is_written_under_the_session_lock():
+    session = {"status": "running", "is_paused_at_gate": False}
+    assert _blocked_while_session_lock_is_held(lambda: server._update_session(session, status="paused", is_paused_at_gate=True))
+    assert session == {"status": "paused", "is_paused_at_gate": True}

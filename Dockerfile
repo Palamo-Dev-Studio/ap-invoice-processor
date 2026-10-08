@@ -33,6 +33,10 @@ COPY --chown=app:app . .
 # cap (AP_LLM_SPEND_CAP_USD) is therefore a per-instance guard only; see DEPLOY.md for the cross-instance stop.
 ENV AP_SPEND_LEDGER_PATH=/tmp/ap-spend/spend.json
 
+# The dashboard refuses a PDF of more than this many pages at upload; the reader repeats the limit and rasterises no
+# further than this page, so a PDF that slips past the upload check still cannot run a long OCR job.
+ENV AP_MAX_PDF_PAGES=10
+
 USER app
 
 # Cloud Run sets PORT; 8080 is the fallback for a local `docker run`.

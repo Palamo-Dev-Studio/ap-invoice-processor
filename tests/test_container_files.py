@@ -93,6 +93,13 @@ def test_the_ledger_defaults_to_tmp_in_the_container():
     assert re.search(r"^ENV AP_SPEND_LEDGER_PATH=/tmp/", _read("Dockerfile"), re.M)
 
 
+def test_the_container_caps_pdf_pages_at_the_dashboard_default():
+    from web.uploads import DEFAULT_MAX_PDF_PAGES
+
+    match = re.search(r"^ENV AP_MAX_PDF_PAGES=(\d+)$", _read("Dockerfile"), re.M)
+    assert match and int(match.group(1)) == DEFAULT_MAX_PDF_PAGES
+
+
 # --- ignore files -----------------------------------------------------------------------------------------------------
 
 SECRET_PATHS = [

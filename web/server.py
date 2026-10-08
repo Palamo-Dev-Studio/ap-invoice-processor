@@ -1,8 +1,11 @@
 import os
+import copy
 import json
 import asyncio
+import threading
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from typing import Dict, Any, Optional
 from fastapi import FastAPI, HTTPException, Request
@@ -28,6 +31,7 @@ from web.uploads import (
     MAX_UPLOAD_BYTES,
     StagedDocument,
     UploadRejected,
+    check_pdf_page_limit,
     list_samples,
     remove_staged,
     stage_document,
@@ -51,6 +55,14 @@ DEFAULT_MAX_CONCURRENT_DOCUMENTS = 2
 web_app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 ACTIVE_SESSIONS: Dict[str, Dict[str, Any]] = {}
+# A workflow leg runs on a worker thread (see _run_leg_in_worker_thread), so a session dict is written there and read
+# on the event loop thread. Every write after a session's creation and every copy for a reader holds this lock, which
+# makes a group of fields change together as far as any reader can tell.
+_SESSION_LOCK = threading.Lock()
+# Where workflow legs run. The reader's pdftoppm/tesseract calls and the synchronous model client block their thread
+# for as long as they take (minutes for a long scan), so they must not share the thread that serves requests.
+_WORKFLOW_THREADS = 16
+_WORKFLOW_EXECUTOR = ThreadPoolExecutor(max_workers=_WORKFLOW_THREADS, thread_name_prefix="ap-workflow")
 # Strong references to running workflow tasks: the event loop keeps only weak ones, and a task collected mid-run would
 # skip the cleanup in _execute_workflow's finally block.
 _BACKGROUND_TASKS: set = set()
@@ -70,6 +82,12 @@ def _spawn(coro) -> None:
     task = asyncio.create_task(coro)
     _BACKGROUND_TASKS.add(task)
     task.add_done_callback(_BACKGROUND_TASKS.discard)
+
+
+def _update_session(sess_info: Dict[str, Any], **fields: Any) -> None:
+    """Change several fields of one session dict as a single step, from any thread."""
+    with _SESSION_LOCK:
+        sess_info.update(fields)
 
 
 def _claim_document_slot() -> bool:
@@ -125,7 +143,8 @@ async def list_invoices():
 async def get_session_state(session_id: str):
     if session_id not in ACTIVE_SESSIONS:
         raise HTTPException(status_code=404, detail="Session not found")
-    session = ACTIVE_SESSIONS[session_id]
+    with _SESSION_LOCK:
+        session = dict(ACTIVE_SESSIONS[session_id])
     return {**session, "node_subtitles": node_subtitles(session.get("invoice_state"))}
 
 class RunInvoiceRequest(BaseModel):
@@ -253,7 +272,17 @@ async def run_custom_invoice(req: RunCustomRequest):
     return {"session_id": session_id, "status": "started", "invoice_id": invoice["id"]}
 
 async def _start_document_run(staged: StagedDocument) -> dict:
-    """Start one workflow run on one staged document, or refuse (429) when the instance is already busy."""
+    """Start one workflow run on one staged document, or refuse it: 413 over the page cap, 429 when the instance is busy."""
+    if staged.path.lower().endswith(".pdf"):
+        try:
+            # pdfinfo is a subprocess, so it runs on a worker thread rather than on the event loop.
+            await asyncio.to_thread(check_pdf_page_limit, staged.path)
+        except UploadRejected as exc:
+            remove_staged(staged.directory)
+            raise HTTPException(status_code=exc.status_code, detail=exc.detail)
+        except BaseException:
+            remove_staged(staged.directory)
+            raise
     if not _claim_document_slot():
         remove_staged(staged.directory)
         raise HTTPException(status_code=429, detail="Another document is still being processed. Try again in a moment.")
@@ -296,14 +325,25 @@ async def run_sample(req: RunSampleRequest):
 
 async def _execute_workflow(session_id: str, adk_session_id: str, new_msg: types.Content = None, staged_dir: Optional[str] = None):
     try:
-        await _run_workflow_leg(session_id, adk_session_id, new_msg)
+        # The leg runs on a worker thread; this coroutine stays on the event loop and only waits for it, so the slot
+        # accounting and the file cleanup below still run on the loop thread.
+        await asyncio.get_running_loop().run_in_executor(
+            _WORKFLOW_EXECUTOR, _run_leg_in_worker_thread, session_id, adk_session_id, new_msg
+        )
     finally:
         # The document is read only by the Intake node, in the first leg, so it is deleted once that leg ends
         # (completed, paused at the gate, or failed). The resume leg after a triage decision never reads it.
         _finish_document_run(staged_dir)
 
 
+def _run_leg_in_worker_thread(session_id: str, adk_session_id: str, new_msg: Optional[types.Content]) -> None:
+    """Drive one workflow leg to its end on this thread, in an event loop of its own."""
+    asyncio.run(_run_workflow_leg(session_id, adk_session_id, new_msg))
+
+
 async def _run_workflow_leg(session_id: str, adk_session_id: str, new_msg: types.Content = None):
+    """Run one leg of a session's workflow. This executes on a worker thread, so it changes the session only through
+    _update_session and publishes an invoice state as a private copy."""
     sess_info = ACTIVE_SESSIONS.get(session_id)
     if not sess_info:
         return
@@ -322,31 +362,33 @@ async def _run_workflow_leg(session_id: str, adk_session_id: str, new_msg: types
                 paused = True
 
             if event.output and isinstance(event.output, dict) and "invoice_id" in event.output:
-                st = event.output
-                sess_info["invoice_state"] = st
+                st = copy.deepcopy(event.output)
+                update: Dict[str, Any] = {"invoice_state": st}
                 if st.get("decision_trail"):
                     last_step = st["decision_trail"][-1]
-                    sess_info["current_node"] = last_step["node_name"]
+                    update["current_node"] = last_step["node_name"]
+                _update_session(sess_info, **update)
 
         if paused:
-            sess_info["status"] = "paused"
-            sess_info["is_paused_at_gate"] = True
-            sess_info["interrupt_id"] = HUMAN_GATE_INTERRUPT_ID
-            sess_info["current_node"] = "Human Gate"
+            _update_session(
+                sess_info,
+                status="paused",
+                is_paused_at_gate=True,
+                interrupt_id=HUMAN_GATE_INTERRUPT_ID,
+                current_node="Human Gate",
+            )
             return
 
         # The stream ended without pausing: the Poster ran (posted or aborted).
         final_state = sess_info.get("invoice_state") or {}
         if isinstance(final_state, dict) and final_state.get("human_decision") == "rejected" and poster_ran(final_state):
-            sess_info["status"] = "aborted"
+            status = "aborted"
         else:
-            sess_info["status"] = "completed"
-        sess_info["is_paused_at_gate"] = False
-        sess_info["current_node"] = "Poster"
+            status = "completed"
+        _update_session(sess_info, status=status, is_paused_at_gate=False, current_node="Poster")
     except Exception as e:
         print(f"Workflow Execution Error for {session_id}: {e}")
-        sess_info["status"] = "error"
-        sess_info["error_message"] = str(e)
+        _update_session(sess_info, status="error", error_message=str(e))
 
 @web_app.post("/api/sessions/{session_id}/triage")
 async def submit_triage(session_id: str, req: HumanTriageRequest):
@@ -359,8 +401,7 @@ async def submit_triage(session_id: str, req: HumanTriageRequest):
     decision = req.decision.lower()
     reasoning = req.reasoning or f"Reviewed and {decision} via dashboard triage."
 
-    sess_info["status"] = "resuming"
-    sess_info["is_paused_at_gate"] = False
+    _update_session(sess_info, status="resuming", is_paused_at_gate=False)
 
     resume_msg = build_resume_message(decision, reasoning)
     _spawn(_execute_workflow(session_id, sess_info["adk_session_id"], new_msg=resume_msg))
