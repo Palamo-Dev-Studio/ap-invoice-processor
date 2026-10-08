@@ -1,0 +1,41 @@
+# What `gcloud run deploy --source .` uploads for the build. Same exclusions as .dockerignore, except that the Dockerfile
+# and .dockerignore must be uploaded. Without this file gcloud builds its own list from .gitignore.
+.gcloudignore
+.git
+.gitignore
+.github
+.claude
+.vscode
+.venv
+venv
+**/__pycache__
+**/*.pyc
+.pytest_cache
+scratch
+*.log
+
+# Anything that could hold a credential
+.env
+.env.*
+*.env
+**/.env
+**/.env.*
+**/*.env
+**/*.pem
+**/*.key
+.config
+.ssh
+.aws
+.gcloud
+
+# Run output and the spend ledger
+eval/out
+**/eval/out
+**/spend.json
+**/spend.json.lock
+
+docs
+eval
+cli_demo.py
+data/corpus/ground_truth
+data/corpus/gl_labels.json
