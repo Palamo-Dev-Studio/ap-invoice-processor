@@ -2,9 +2,10 @@ import os
 import json
 import asyncio
 import time
+import uuid
 from datetime import datetime
 from typing import Dict, Any, Optional
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
@@ -14,11 +15,23 @@ from google.adk.runners import InMemoryRunner
 from google.genai import types
 
 from ap_invoice_processor.graph import root_agent
+from ap_invoice_processor.llm.provider import DEFAULT_PROVIDER, PROVIDER_ENV
 from ap_invoice_processor.hitl import (
     HUMAN_GATE_INTERRUPT_ID,
     is_paused_at_gate,
     build_resume_message,
     poster_ran,
+)
+from web.presentation import DEMO_NOTICE, demo_mode_enabled, node_subtitles, render_index
+from web.uploads import (
+    ALLOWED_TYPES,
+    MAX_UPLOAD_BYTES,
+    StagedDocument,
+    UploadRejected,
+    list_samples,
+    remove_staged,
+    stage_document,
+    stage_sample,
 )
 
 app_instance = App(name="ap_copilot_app", root_agent=root_agent)
@@ -29,10 +42,52 @@ web_app = FastAPI(title="AP Copilot - Autonomous Invoice Processing Dashboard")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 DATA_DIR = os.path.join(os.path.dirname(BASE_DIR), "data")
+CORPUS_DIR = os.path.join(DATA_DIR, "corpus")
+# Headroom over MAX_UPLOAD_BYTES for the multipart envelope when the Content-Length header is checked up front.
+MULTIPART_OVERHEAD_BYTES = 64 * 1024
+MAX_CONCURRENT_ENV = "AP_MAX_CONCURRENT_UPLOADS"
+DEFAULT_MAX_CONCURRENT_DOCUMENTS = 2
 
 web_app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 ACTIVE_SESSIONS: Dict[str, Dict[str, Any]] = {}
+# Strong references to running workflow tasks: the event loop keeps only weak ones, and a task collected mid-run would
+# skip the cleanup in _execute_workflow's finally block.
+_BACKGROUND_TASKS: set = set()
+# Document runs (uploads and samples) whose first workflow leg has not finished. Read and changed only on the event
+# loop thread with no await in between, so the limit check below cannot race.
+_documents_in_flight = 0
+
+
+def _max_concurrent_documents() -> int:
+    try:
+        return max(1, int(os.environ.get(MAX_CONCURRENT_ENV, DEFAULT_MAX_CONCURRENT_DOCUMENTS)))
+    except ValueError:
+        return DEFAULT_MAX_CONCURRENT_DOCUMENTS
+
+
+def _spawn(coro) -> None:
+    task = asyncio.create_task(coro)
+    _BACKGROUND_TASKS.add(task)
+    task.add_done_callback(_BACKGROUND_TASKS.discard)
+
+
+def _claim_document_slot() -> bool:
+    global _documents_in_flight
+    if _documents_in_flight >= _max_concurrent_documents():
+        return False
+    _documents_in_flight += 1
+    return True
+
+
+def _finish_document_run(staged_dir: Optional[str]) -> None:
+    """End a document run: delete its staged file and free its slot. A run without a staged dir is a no-op."""
+    global _documents_in_flight
+    if staged_dir is None:
+        return
+    remove_staged(staged_dir)
+    _documents_in_flight = max(0, _documents_in_flight - 1)
+
 
 def load_synthetic_invoices() -> list:
     inv_path = os.path.join(DATA_DIR, "synthetic_invoices", "invoices.json")
@@ -45,7 +100,22 @@ def load_synthetic_invoices() -> list:
 async def get_index():
     index_path = os.path.join(STATIC_DIR, "index.html")
     with open(index_path, "r") as f:
-        return HTMLResponse(content=f.read())
+        return HTMLResponse(content=render_index(f.read(), demo_mode_enabled()))
+
+@web_app.get("/api/config")
+async def get_config():
+    demo = demo_mode_enabled()
+    return {
+        "demo_mode": demo,
+        "notice": DEMO_NOTICE if demo else None,
+        "llm_provider": (os.environ.get(PROVIDER_ENV) or DEFAULT_PROVIDER).strip().lower(),
+        "max_upload_bytes": MAX_UPLOAD_BYTES,
+        "accepted_types": sorted(ALLOWED_TYPES),
+    }
+
+@web_app.get("/api/samples")
+async def get_samples():
+    return list_samples(CORPUS_DIR)
 
 @web_app.get("/api/invoices")
 async def list_invoices():
@@ -55,10 +125,14 @@ async def list_invoices():
 async def get_session_state(session_id: str):
     if session_id not in ACTIVE_SESSIONS:
         raise HTTPException(status_code=404, detail="Session not found")
-    return ACTIVE_SESSIONS[session_id]
+    session = ACTIVE_SESSIONS[session_id]
+    return {**session, "node_subtitles": node_subtitles(session.get("invoice_state"))}
 
 class RunInvoiceRequest(BaseModel):
     invoice_id: str
+
+class RunSampleRequest(BaseModel):
+    sample_id: str
 
 class RunCustomRequest(BaseModel):
     vendor_name: str
@@ -71,13 +145,26 @@ class HumanTriageRequest(BaseModel):
     reasoning: Optional[str] = None
 
 
-async def _start_invoice_run(invoice: dict) -> str:
+async def _start_invoice_run(invoice: dict, staged_dir: Optional[str] = None) -> str:
     """Create a fresh ADK session for an invoice payload, register it in
-    ACTIVE_SESSIONS, and kick off _execute_workflow. Shared by both the
-    pre-baked (/api/run) and custom (/api/run-custom) entry points so they run
-    through the identical session + workflow machinery. Returns the session id."""
+    ACTIVE_SESSIONS, and kick off _execute_workflow. Shared by the pre-baked
+    (/api/run), custom (/api/run-custom) and document (/api/run-upload,
+    /api/run-sample) entry points so they run through the identical session +
+    workflow machinery. Returns the session id.
+
+    `staged_dir` is the temp dir of a document run's file: it is deleted, and the
+    run's slot freed, when the first workflow leg ends, or here if the run cannot start."""
+    try:
+        return await _launch_invoice_run(invoice, staged_dir)
+    except BaseException:
+        _finish_document_run(staged_dir)
+        raise
+
+
+async def _launch_invoice_run(invoice: dict, staged_dir: Optional[str]) -> str:
     invoice_id = invoice["id"]
-    session_id = f"sess_{invoice_id}_{int(asyncio.get_event_loop().time())}"
+    # The suffix keeps two runs of the same invoice in the same second from sharing a session.
+    session_id = f"sess_{invoice_id}_{int(asyncio.get_event_loop().time())}_{uuid.uuid4().hex[:8]}"
 
     adk_session = await runner.session_service.create_session(
         app_name="ap_copilot_app", user_id="demo_user"
@@ -96,7 +183,7 @@ async def _start_invoice_run(invoice: dict) -> str:
 
     input_text = json.dumps(invoice)
     start_msg = types.Content(role="user", parts=[types.Part.from_text(text=input_text)])
-    asyncio.create_task(_execute_workflow(session_id, adk_session.id, new_msg=start_msg))
+    _spawn(_execute_workflow(session_id, adk_session.id, new_msg=start_msg, staged_dir=staged_dir))
     return session_id
 
 
@@ -165,7 +252,58 @@ async def run_custom_invoice(req: RunCustomRequest):
     session_id = await _start_invoice_run(invoice)
     return {"session_id": session_id, "status": "started", "invoice_id": invoice["id"]}
 
-async def _execute_workflow(session_id: str, adk_session_id: str, new_msg: types.Content = None):
+async def _start_document_run(staged: StagedDocument) -> dict:
+    """Start one workflow run on one staged document, or refuse (429) when the instance is already busy."""
+    if not _claim_document_slot():
+        remove_staged(staged.directory)
+        raise HTTPException(status_code=429, detail="Another document is still being processed. Try again in a moment.")
+    # The payload names the file stem as the id, so the invoice id and document id are the same readable name.
+    session_id = await _start_invoice_run({"id": staged.stem, "document_path": staged.path}, staged_dir=staged.directory)
+    return {"session_id": session_id, "status": "started", "invoice_id": staged.stem}
+
+
+@web_app.post("/api/run-upload")
+async def run_upload(request: Request):
+    """Run the document path on one uploaded PDF/PNG/JPEG. The request must carry exactly one file part named
+    "file"; the file is staged in a private temp dir and deleted when the workflow's first leg ends."""
+    declared = request.headers.get("content-length", "")
+    if declared.isdigit() and int(declared) > MAX_UPLOAD_BYTES + MULTIPART_OVERHEAD_BYTES:
+        raise HTTPException(status_code=413, detail="The file is larger than the 5 MB limit.")
+    # The multipart parser buffers the body before this handler sees it, so a client that omits Content-Length is
+    # bounded by the platform's request-size limit (Cloud Run: 32 MiB), not by this check; the bytes read below are capped.
+    async with request.form(max_files=1, max_fields=1) as form:
+        parts = form.multi_items()
+        if len(parts) != 1 or parts[0][0] != "file" or not hasattr(parts[0][1], "read"):
+            raise HTTPException(status_code=400, detail="Send exactly one document, in a form field named 'file'.")
+        upload = parts[0][1]
+        data = await upload.read(MAX_UPLOAD_BYTES + 1)
+        filename = upload.filename
+    try:
+        staged = stage_document(filename, data)
+    except UploadRejected as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail)
+    return await _start_document_run(staged)
+
+
+@web_app.post("/api/run-sample")
+async def run_sample(req: RunSampleRequest):
+    try:
+        staged = stage_sample(CORPUS_DIR, req.sample_id)
+    except UploadRejected as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail)
+    return await _start_document_run(staged)
+
+
+async def _execute_workflow(session_id: str, adk_session_id: str, new_msg: types.Content = None, staged_dir: Optional[str] = None):
+    try:
+        await _run_workflow_leg(session_id, adk_session_id, new_msg)
+    finally:
+        # The document is read only by the Intake node, in the first leg, so it is deleted once that leg ends
+        # (completed, paused at the gate, or failed). The resume leg after a triage decision never reads it.
+        _finish_document_run(staged_dir)
+
+
+async def _run_workflow_leg(session_id: str, adk_session_id: str, new_msg: types.Content = None):
     sess_info = ACTIVE_SESSIONS.get(session_id)
     if not sess_info:
         return
@@ -225,5 +363,5 @@ async def submit_triage(session_id: str, req: HumanTriageRequest):
     sess_info["is_paused_at_gate"] = False
 
     resume_msg = build_resume_message(decision, reasoning)
-    asyncio.create_task(_execute_workflow(session_id, sess_info["adk_session_id"], new_msg=resume_msg))
+    _spawn(_execute_workflow(session_id, sess_info["adk_session_id"], new_msg=resume_msg))
     return {"status": "resumed", "decision": decision}

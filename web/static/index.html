@@ -7,10 +7,11 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=2.1">
+    <link rel="stylesheet" href="/static/style.css?v=2.2">
 </head>
 <body>
     <div class="app-container">
+        <!--demo-notice-->
         <!-- Header & ROI Readout Banner -->
         <header class="top-header">
             <div class="logo-area">
@@ -21,6 +22,7 @@
                 </div>
             </div>
 
+            <!--roi-banner:start-->
             <div class="roi-metrics-card">
                 <div class="metric-box">
                     <span class="metric-label">Manual Processing</span>
@@ -37,6 +39,7 @@
                     <span class="metric-value highlight-text">87.9% <small>ROI</small></span>
                 </div>
             </div>
+            <!--roi-banner:end-->
         </header>
 
         <!-- Main Workspace -->
@@ -47,7 +50,28 @@
                     <h2>📦 Invoice Drop & Intake</h2>
                     <span class="step-badge">Phase 1 Data</span>
                 </div>
-                <p class="panel-desc">Select a synthetic invoice scenario to trigger the ADK agent graph:</p>
+                <!-- Upload a document: runs the document path (reader -> extraction -> GL coding -> validator) -->
+                <div class="custom-invoice-card upload-card" id="upload-card">
+                    <div class="panel-header">
+                        <h2>📄 Upload an Invoice</h2>
+                        <span class="step-badge">Document path</span>
+                    </div>
+                    <p class="panel-desc">Upload a PDF, PNG or JPEG invoice (max 5 MB), or pick a synthetic sample. It is read, extracted, GL-coded and validated; risky invoices stop at the Human Gate. The file is deleted as soon as it has been read.</p>
+                    <div class="custom-invoice-form">
+                        <label for="upload-file">Invoice file</label>
+                        <input type="file" id="upload-file" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg">
+                        <button id="btn-run-upload" class="btn btn-run">⚡ Run Uploaded Invoice</button>
+
+                        <label for="sample-select">...or pick a synthetic sample</label>
+                        <select id="sample-select"></select>
+                        <button id="btn-run-sample" class="btn btn-run">⚡ Run Sample</button>
+
+                        <div id="upload-error" class="custom-error hidden"></div>
+                        <p id="provider-note" class="panel-desc"></p>
+                    </div>
+                </div>
+
+                <p class="panel-desc" style="margin-top: 16px;">Or select a pre-built scenario (simulated extraction: the fields are supplied, no document is read) to trigger the ADK agent graph:</p>
                 
                 <div id="invoice-list" class="invoice-list-container">
                     <div class="loading-spinner">Loading synthetic test suite...</div>
@@ -105,13 +129,13 @@
                     <div class="node-step" id="node-Extractor">
                         <div class="node-icon">🧾</div>
                         <div class="node-title">Extractor</div>
-                        <div class="node-sub">Field Extract</div>
+                        <div class="node-sub">Extraction</div>
                     </div>
                     <div class="pipeline-connector" id="conn-2"></div>
                     <div class="node-step" id="node-GL-Coder">
                         <div class="node-icon">🏷️</div>
                         <div class="node-title">GL-Coder</div>
-                        <div class="node-sub">SKILL.md Rules</div>
+                        <div class="node-sub">GL Coding</div>
                     </div>
                     <div class="pipeline-connector" id="conn-3"></div>
                     <div class="node-step" id="node-Policy-Validator">
@@ -136,7 +160,7 @@
                     <div class="node-step success-node" id="node-Poster">
                         <div class="node-icon">🏦</div>
                         <div class="node-title">Poster</div>
-                        <div class="node-sub">NetSuite ERP</div>
+                        <div class="node-sub">Mock NetSuite</div>
                     </div>
                 </div>
 
@@ -184,6 +208,6 @@
         </main>
     </div>
 
-    <script src="/static/app.js?v=2.1"></script>
+    <script src="/static/app.js?v=2.2"></script>
 </body>
 </html>
