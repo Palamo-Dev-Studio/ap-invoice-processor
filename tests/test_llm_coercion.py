@@ -1,5 +1,7 @@
 # ABOUTME: Unit tests for the model-response coercion helpers: amounts, dates, currency codes and optional text.
 # ABOUTME: Covers US and European number formats, ES and EN date forms, and values that must be rejected.
+import time
+
 import pytest
 
 from ap_invoice_processor.llm.coercion import (
@@ -32,6 +34,10 @@ from ap_invoice_processor.llm.coercion import (
         ("0,50", 0.5),
         ("0.125", 0.12),
         ("(12.50)", -12.5),
+        ("(100)", -100.0),
+        ("($1,234.56)", -1234.56),
+        ("$(1.437,12)", -1437.12),
+        ("(634,73 €)", -634.73),
         ("-3.00", -3.0),
     ],
 )
@@ -46,6 +52,24 @@ def test_parse_amount_accepts(raw, expected):
 def test_parse_amount_rejects(raw):
     with pytest.raises(ValueError):
         parse_amount(raw)
+
+
+@pytest.mark.parametrize(
+    "raw",
+    ["(100", "100)", "(1,234.56", "1,234.56)", "($100", "100)$", "((100))", "(100))", ")100(", "(-100)", "-(100)", "(", ")", "()"],
+)
+def test_parse_amount_rejects_unbalanced_or_doubled_negative_markers(raw):
+    # A lone "(" used to read as a minus sign, so OCR damage that dropped one parenthesis flipped the amount's sign.
+    with pytest.raises(ValueError):
+        parse_amount(raw)
+
+
+def test_a_very_long_malformed_amount_is_rejected_in_linear_time():
+    started = time.perf_counter()
+    for tail in ("x", ")"):
+        with pytest.raises(ValueError):
+            parse_amount("1" * 100_000 + tail)
+    assert time.perf_counter() - started < 1.0  # a quadratic pattern needs many seconds for this input
 
 
 def test_parse_quantity_rejects_negative():

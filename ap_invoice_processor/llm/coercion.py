@@ -25,7 +25,10 @@ _NUMERIC_DATE = re.compile(r"^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$")
 _CURRENCY_DECORATION = re.compile(
     r"\b(?:USD|EUR|GBP|MXN|CAD|AUD|CHF|JPY|COP|CLP|ARS)\b|[$€£\s]", re.IGNORECASE
 )
-_NUMBER_SHAPE = re.compile(r"[-(]?[\d.,]*\d[\d.,]*\)?")
+# A leading minus, or a number wrapped in a balanced pair of parentheses (accounting negative). A lone parenthesis
+# is OCR damage, and reading it as a sign would flip the amount, so it does not match. The digits-and-separators run
+# with at least one digit is written as a lookahead plus one run so that a long non-matching string fails in linear time.
+_NUMBER_SHAPE = re.compile(r"-?(?=[\d.,]*\d)[\d.,]+|\((?=[\d.,]*\d)[\d.,]+\)")
 _THOUSANDS_GROUPS = re.compile(r"^\d{1,3}([.,]\d{3})+$")
 
 
