@@ -12,7 +12,7 @@ DRAFT for Hector's rewrite — generated 2026-10-07 by Nico (Night Shift). No fi
 | # | time | on-screen | VO draft | notes |
 |---|---|---|---|---|
 | 1 | 0-6 s | Motion graphic: a stack of invoices (EN and ES, a few look like phone photos or scans) slides in. Lower-third: "All data shown is synthetic." | "This is a normal week in accounts payable. A pile of invoices. Some in Spanish. Some photographed on a desk." | Synthetic corpus built tonight. The lower-third appears once, here. |
-| 2 | 6-15 s | Screen recording: drop a folder of invoices into intake. One PDF opens, then its extracted text appears beside it. Then a scan: the OCR text appears, with a few damaged characters. | "First, the system reads each document. Text from the PDF. For a scan or a photo, it reads the image." | Reader layer (pdftotext, OCR). No UI for this exists yet: needs a simple viewer. Spanish OCR runs on English language data tonight, so accents may break. |
+| 2 | 6-15 s | Screen recording: drop a folder of invoices into intake. One PDF opens, then its extracted text appears beside it. Then a scan: the OCR text appears, with a few damaged characters. | "First, the system reads each document. Text from the PDF. For a scan or a photo, it reads the image." | Reader layer (pdftotext, OCR). No UI for this exists yet: needs a simple viewer. Scans and photos are read with `eng+spa` OCR, so Spanish accents mostly survive. The offline fixtures were written from earlier `-l eng` text. |
 | 3 | 15-26 s | Recording: the invoice beside a field panel. Vendor, date, PO number and line items fill in; a field it could not read is flagged empty. | "Then it pulls the fields: vendor, date, PO number, each line item. Anything it couldn't read is flagged empty, so a person knows what to check." | Confidence today is presence-based (a field is 1.0 if the extraction returned a value, 0.0 if it left it null); it is not a model confidence, so show filled versus empty fields, not a score. The dashboard's Extractor node reads pre-structured fields, so the recording must come from the document path. See open question 1. |
 | 4 | 26-37 s | Recording: each line gets a proposed GL code and a one-line reason in the decision trail. Cut to a second line the model was unsure about, flagged. | "Next, it proposes a GL code for each line, and says why. When it isn't sure, it says so." | GL coder behind the provider interface. On the document path the GL-Coder node records, per line, which coder answered (`source`: `llm` or `keyword_fallback`) and its reason in the decision trail; a line the LLM coder cannot code validly falls back to the keyword coder. Fixture-backed tonight, so the recording shows fixture responses. |
 | 5 | 37-46 s | Recording: the Validator node lights up. Checks tick through: vendor master, PO match, duplicate check, the $5,000 ceiling. Label on the ERP panel: "MOCK ERP, synthetic." | "Then it checks the vendor, the PO, and whether you've seen this invoice before. Anything over the ceiling goes to a person." | Mock NetSuite connector. Say "mock" on screen. The $5,000 ceiling is the existing policy rule. |
@@ -25,9 +25,11 @@ DRAFT for Hector's rewrite — generated 2026-10-07 by Nico (Night Shift). No fi
 
 ## Open questions for Hector
 
-- Will the extraction and GL coding run live on camera? That needs the LLM provider, a key and a spend cap (stop (a) in the queue). Without it, the recording shows fixture responses and the VO cannot say "the model."
+> **Gate:** no recording until Rocio has tested the demo and given her OK (Hector's standing rule, 2026-10-07).
+
+- Will the extraction and GL coding run live on camera? The live provider (Claude Haiku 5.5), the key and the spend cap are now in place, so a live recording can say "the model." The first live eval ran on 2026-10-08 against the synthetic corpus.
 - Does the dashboard header's cost/ROI banner come off for recording? It is hard-coded in `web/static/index.html` and must not appear on screen. The GL-Coder node subtitle ("SKILL.md Rules") must also match the new coder.
-- Should a Spanish invoice be on screen in beats 2-3? OCR on Spanish scans is weak until Spanish language data is installed (stop (c)).
+- Should a Spanish invoice be on screen in beats 2-3? Spanish OCR data is now installed and used by default (`eng+spa`).
 - What belongs in the eval beat's number slot? Left as [FIGURE — Hector to supply after live eval].
 
 ## Assets needed
