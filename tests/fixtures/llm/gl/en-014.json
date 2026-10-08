@@ -1,0 +1,17 @@
+{
+ "_authored_from": "reader_text",
+ "lines": [
+  {
+   "line": 0,
+   "account": "6100",
+   "confidence": 0.5,
+   "reason": "Consumable supplies."
+  },
+  {
+   "line": 1,
+   "account": "6200",
+   "confidence": 0.3,
+   "reason": "Cleaning service; no account fits well."
+  }
+ ]
+}

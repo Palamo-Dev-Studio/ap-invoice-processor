@@ -1,0 +1,46 @@
+{
+  "doc_id": "en-016",
+  "base_doc_id": "en-016",
+  "source_file": "pdf/en-016.pdf",
+  "language": "en",
+  "variant": "pdf",
+  "layout": "twocol",
+  "vendor_name": "Larkspur Catering Group",
+  "vendor_id": null,
+  "invoice_number": "LC-3871",
+  "invoice_date": "2026-08-12",
+  "due_date": "2026-09-11",
+  "currency": "USD",
+  "subtotal": 1130.61,
+  "tax_rate": 0.0825,
+  "tax": 93.28,
+  "total": 1223.89,
+  "total_display": "$1,223.89",
+  "po_number": null,
+  "line_items": [
+    {
+      "description": "Coffee and pastry service",
+      "quantity": 21,
+      "unit_price": 13.89,
+      "amount": 291.69
+    },
+    {
+      "description": "Service staff, hourly",
+      "quantity": 15,
+      "unit_price": 35.54,
+      "amount": 533.1
+    },
+    {
+      "description": "Working lunch, per head",
+      "quantity": 12,
+      "unit_price": 20.38,
+      "amount": 244.56
+    },
+    {
+      "description": "Equipment rental",
+      "quantity": 1,
+      "unit_price": 61.26,
+      "amount": 61.26
+    }
+  ]
+}

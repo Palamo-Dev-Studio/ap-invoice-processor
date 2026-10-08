@@ -1,0 +1,29 @@
+{
+ "_authored_from": "reader_text",
+ "lines": [
+  {
+   "line": 0,
+   "account": "6100",
+   "confidence": 0.5,
+   "reason": "Ancillary charge on office furniture."
+  },
+  {
+   "line": 1,
+   "account": "6100",
+   "confidence": 0.7,
+   "reason": "Office furniture; no furniture account, office supplies is closest."
+  },
+  {
+   "line": 2,
+   "account": "7000",
+   "confidence": 0.5,
+   "reason": "Monitor mounting hardware; no furniture account, computer hardware is closest."
+  },
+  {
+   "line": 3,
+   "account": "6100",
+   "confidence": 0.7,
+   "reason": "Office furniture; no furniture account, office supplies is closest."
+  }
+ ]
+}

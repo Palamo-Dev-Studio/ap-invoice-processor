@@ -1,0 +1,49 @@
+INVOICE Tidewell Office Furniture
+
+Description Qty Unit Price Amount
+
+Delivery and assembly 1 $185.56 $185.56
+Task chair, mesh back 5 $239.77 $1,198.85
+Monitor arm, dual 5 $77.01 $385.05
+Height-adjustable desk 6 $460.57 $2,763.42
+Subtotal $4,532.88
+Tax (8.25%) $373.96
+Total (USD) $4,906.84
+
+Thank you for your business.
+
+INVOICE NO.
+TW-99943
+
+INVOICE DATE
+2026-08-23
+
+BILL TO
+
+Cedar & Finch Operating Co.
+
+200 Demo Boulevard
+Exampleton, ST 00000
+
+Description
+
+Delivery and assembly
+Task chair, mesh back
+Monitor arm, dual
+
+Height-adjustable desk
+
+Thank you for your business.
+
+Qty Unit Price Amount
+
+1 $185.56 $185.56
+
+5 $239.77 $1,198.85
+
+5 $77.01 $385.05
+
+6 $460.57 $2,763.42
+Subtotal $4,532.88
+Tax (8.25%) $373.96
+Total (USD) $4,906.84

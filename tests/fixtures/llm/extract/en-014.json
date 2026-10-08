@@ -1,0 +1,16 @@
+{
+  "_authored_from": "reader_text",
+  "vendor_name": "Brightwater Janitorial LLC",
+  "invoice_number": "BW078468",
+  "invoice_date": "2026-03-20",
+  "due_date": "2026-04-04",
+  "currency": "USD",
+  "po_number": "PO-7377",
+  "line_items": [
+    {"description": "Restroom supply restock", "quantity": 1, "unit_price": 108.67, "amount": 108.67},
+    {"description": "Monthly cleaning service, Suite 200", "quantity": 1, "unit_price": 1270.77, "amount": 1270.77}
+  ],
+  "subtotal": 1379.44,
+  "tax": 113.80,
+  "total": 1493.24
+}

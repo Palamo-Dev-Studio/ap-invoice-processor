@@ -10,6 +10,10 @@ from google.adk.agents.context import Context
 from google.adk.workflow import node
 
 from ap_invoice_processor.models import InvoiceState, DecisionStep, LineItem
+from ap_invoice_processor.document_intake import fill_state_from_document
+from ap_invoice_processor.keyword_coder import keyword_code, match_vendor
+from ap_invoice_processor.llm.gl import code_lines, load_chart
+from ap_invoice_processor.llm.provider import get_provider
 from ap_invoice_processor.skill_loader import load_skill_rules
 from mcp_server.netsuite_mcp_client import post_invoice_sync
 
@@ -42,6 +46,7 @@ def _parse_input_to_dict(node_input: Any) -> dict:
 def intake_node(ctx: Context, node_input: Any) -> Event:
     """Intake node: pulls raw invoice payload and initializes normalized shared state."""
     payload = _parse_input_to_dict(node_input)
+    document_path = payload.get("document_path") if payload else None
     
     if payload and "id" in payload:
         invoice_id = payload.get("id")
@@ -57,6 +62,16 @@ def intake_node(ctx: Context, node_input: Any) -> Event:
         raw_text=raw_text
     )
 
+    doc_summary = None
+    if document_path:
+        # A document payload is read and extracted through the configured LLM provider. Any simulated
+        # extraction in the same payload is ignored so the two sources never mix.
+        extracted_sim = {}
+        doc_summary = fill_state_from_document(invoice_state, document_path)
+        invoice_state.document_id = doc_summary["doc_id"]
+        if not (payload and "id" in payload):
+            invoice_state.invoice_id = invoice_id = doc_summary["doc_id"]
+
     if extracted_sim:
         for k, v in extracted_sim.items():
             if k == "line_items":
@@ -67,14 +82,24 @@ def intake_node(ctx: Context, node_input: Any) -> Event:
             elif hasattr(invoice_state.extracted_fields, k):
                 setattr(invoice_state.extracted_fields, k, v)
 
-    step = DecisionStep(
-        step_index=len(invoice_state.decision_trail) + 1,
-        node_name="Intake",
-        action="Pull & Normalize Raw Invoice",
-        reasoning=f"Successfully ingested raw invoice payload for ID {invoice_id}.",
-        confidence=1.0,
-        output_summary={"invoice_id": invoice_id, "raw_length": len(raw_text)}
-    )
+    if doc_summary is not None:
+        step = DecisionStep(
+            step_index=len(invoice_state.decision_trail) + 1,
+            node_name="Intake",
+            action="Read Document & Extract Fields via LLM Provider",
+            reasoning=f"Read document for ID {invoice_id}; extraction result: {doc_summary['extraction']}.",
+            confidence=1.0 if doc_summary["extraction"] == "ok" else 0.0,
+            output_summary={"invoice_id": invoice_id, "raw_length": len(invoice_state.raw_text), **doc_summary}
+        )
+    else:
+        step = DecisionStep(
+            step_index=len(invoice_state.decision_trail) + 1,
+            node_name="Intake",
+            action="Pull & Normalize Raw Invoice",
+            reasoning=f"Successfully ingested raw invoice payload for ID {invoice_id}.",
+            confidence=1.0,
+            output_summary={"invoice_id": invoice_id, "raw_length": len(raw_text)}
+        )
     invoice_state.decision_trail.append(step)
 
     state_dict = invoice_state.model_dump()
@@ -110,54 +135,82 @@ def extractor_node(ctx: Context, node_input: Any) -> Event:
     res_dict = invoice_state.model_dump()
     return Event(output=res_dict, state={"invoice_state": res_dict})
 
+def _gl_code_document(invoice_state: InvoiceState) -> Event:
+    """Code a document-intake invoice with the LLM coder; per-line failures fall back to the keyword coder.
+
+    A provider that is not enabled (NotImplementedError) or a misconfigured provider name (ValueError)
+    propagates rather than silently falling back to the keyword coder.
+    """
+    fields = invoice_state.extracted_fields
+    provider = get_provider()
+    codes = code_lines(
+        fields.line_items,
+        load_chart(),
+        provider,
+        invoice_state.document_id,
+        vendor_name=fields.vendor_name,
+        skill_rules=load_skill_rules(),
+    )
+
+    lines_summary = []
+    for i, (item, code) in enumerate(zip(fields.line_items, codes)):
+        item.gl_account = code.account
+        item.gl_account_name = code.account_name
+        item.department = code.department
+        lines_summary.append(
+            {
+                "line": i,
+                "account": code.account,
+                "source": code.source,
+                "confidence": code.confidence,
+                "reason": code.reason,
+            }
+        )
+    llm_count = sum(1 for code in codes if code.source == "llm")
+    fallback_count = len(codes) - llm_count
+
+    step = DecisionStep(
+        step_index=len(invoice_state.decision_trail) + 1,
+        node_name="GL-Coder",
+        action="Code Line Items via LLM Provider with Keyword Fallback",
+        reasoning=(
+            f"Coded {len(codes)} line items through the {type(provider).__name__}: "
+            f"{llm_count} by the LLM coder, {fallback_count} by the keyword fallback."
+        ),
+        confidence=min((code.confidence for code in codes), default=0.0),
+        output_summary={
+            "coded_line_items": len(codes),
+            "llm_coded": llm_count,
+            "keyword_fallback": fallback_count,
+            "provider": type(provider).__name__,
+            "lines": lines_summary,
+        },
+    )
+    invoice_state.decision_trail.append(step)
+
+    res_dict = invoice_state.model_dump()
+    return Event(output=res_dict, state={"invoice_state": res_dict})
+
+
 @node
 def gl_coder_node(ctx: Context, node_input: Any) -> Event:
     """GL-Coder node: map line items to GL accounts using SKILL.md rules."""
     state_dict = node_input if isinstance(node_input, dict) and "invoice_id" in node_input else ctx.state.get("invoice_state", {})
     invoice_state = InvoiceState(**state_dict)
 
+    if invoice_state.document_id is not None:
+        return _gl_code_document(invoice_state)
+
     skill_rules = load_skill_rules()
     vendor_master = _load_json_data("vendor_master.json")
 
-    vendor_name_clean = (invoice_state.extracted_fields.vendor_name or "").lower()
-    matched_vendor_entry = None
-    if isinstance(vendor_master, list):
-        for vm in vendor_master:
-            if vm["name"].lower() in vendor_name_clean or any(alias.lower() in vendor_name_clean for alias in vm.get("aliases", [])):
-                matched_vendor_entry = vm
-                break
+    matched_vendor_entry = match_vendor(invoice_state.extracted_fields.vendor_name, vendor_master)
 
     coded_count = 0
     for item in invoice_state.extracted_fields.line_items:
-        gl = None
-        gl_name = None
-        dept = None
-
-        if matched_vendor_entry:
-            gl = matched_vendor_entry.get("default_gl_account")
-            dept = matched_vendor_entry.get("default_department")
-
-        if not gl:
-            for rule in skill_rules.vendor_mappings:
-                if any(kw in vendor_name_clean for kw in rule["keywords"]):
-                    gl = rule["gl"]
-                    gl_name = rule["gl_name"]
-                    dept = rule["department"]
-                    break
-
-        if not gl:
-            desc_clean = item.description.lower()
-            for fb in skill_rules.fallback_keywords:
-                if any(kw in desc_clean for kw in fb["keywords"]):
-                    gl = fb["gl"]
-                    gl_name = fb["gl_name"]
-                    dept = fb["department"]
-                    break
-
-        if not gl:
-            gl = "6100"
-            gl_name = "Office Supplies & Software (Fallback)"
-            dept = "Administration"
+        gl, gl_name, dept, _rule = keyword_code(
+            invoice_state.extracted_fields.vendor_name, item.description, matched_vendor_entry, skill_rules
+        )
 
         item.gl_account = gl
         item.gl_account_name = gl_name

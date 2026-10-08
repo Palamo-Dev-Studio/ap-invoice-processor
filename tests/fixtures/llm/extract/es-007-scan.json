@@ -1,0 +1,16 @@
+{
+  "_authored_from": "reader_text",
+  "_damage_note": "accent damage in the vendor name, copied as printed in the OCR text",
+  "vendor_name": "Consultoria Estrella del Norte S.C.",
+  "invoice_number": "CEN-6484",
+  "invoice_date": "2026-06-07",
+  "due_date": null,
+  "currency": "MXN",
+  "po_number": null,
+  "line_items": [
+    {"description": "Informe ejecutivo", "quantity": 1, "unit_price": 4048.78, "amount": 4048.78}
+  ],
+  "subtotal": 4048.78,
+  "tax": 647.80,
+  "total": 4696.58
+}

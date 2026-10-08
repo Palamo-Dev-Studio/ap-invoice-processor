@@ -1,0 +1,40 @@
+{
+  "doc_id": "es-005",
+  "base_doc_id": "es-005",
+  "source_file": "pdf/es-005.pdf",
+  "language": "es",
+  "variant": "pdf",
+  "layout": "twocol",
+  "vendor_name": "Servicios Tecnológicos Alborada S.A.",
+  "vendor_id": null,
+  "invoice_number": "STA-51293",
+  "invoice_date": "2026-04-17",
+  "due_date": "2026-05-02",
+  "currency": "USD",
+  "subtotal": 23941.83,
+  "tax_rate": 0.0825,
+  "tax": 1975.2,
+  "total": 25917.03,
+  "total_display": "$25,917.03",
+  "po_number": null,
+  "line_items": [
+    {
+      "description": "Mantenimiento de servidores (hrs)",
+      "quantity": 6,
+      "unit_price": 914.62,
+      "amount": 5487.72
+    },
+    {
+      "description": "Licencia de antivirus, anual",
+      "quantity": 27,
+      "unit_price": 494.02,
+      "amount": 13338.54
+    },
+    {
+      "description": "Instalación de equipo",
+      "quantity": 3,
+      "unit_price": 1705.19,
+      "amount": 5115.57
+    }
+  ]
+}

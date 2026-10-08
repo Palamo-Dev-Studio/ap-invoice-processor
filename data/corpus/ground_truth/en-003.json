@@ -1,0 +1,28 @@
+{
+  "doc_id": "en-003",
+  "base_doc_id": "en-003",
+  "source_file": "pdf/en-003.pdf",
+  "language": "en",
+  "variant": "pdf",
+  "layout": "letter",
+  "vendor_name": "Apex Consulting Group",
+  "vendor_id": "VEND-1003",
+  "invoice_number": "AC-42503",
+  "invoice_date": "2026-01-24",
+  "due_date": "2026-03-10",
+  "currency": "USD",
+  "subtotal": 1688.11,
+  "tax_rate": 0.0,
+  "tax": 0.0,
+  "total": 1688.11,
+  "total_display": "$1,688.11",
+  "po_number": "PO-8812",
+  "line_items": [
+    {
+      "description": "Process review workshop",
+      "quantity": 1,
+      "unit_price": 1688.11,
+      "amount": 1688.11
+    }
+  ]
+}

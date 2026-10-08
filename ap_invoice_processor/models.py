@@ -46,6 +46,9 @@ class ExtractedInvoiceFields(BaseModel):
 
 class InvoiceState(BaseModel):
     invoice_id: str
+    # File stem of the document the state was read from; None for payloads that carry simulated extraction.
+    # The GL-Coder node uses it to choose the LLM coder over the keyword rules.
+    document_id: Optional[str] = None
     raw_text: str = ""
     extracted_fields: ExtractedInvoiceFields = Field(default_factory=ExtractedInvoiceFields)
     field_confidence: FieldConfidence = Field(default_factory=FieldConfidence)

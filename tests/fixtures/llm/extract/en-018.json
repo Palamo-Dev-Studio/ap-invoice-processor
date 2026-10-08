@@ -1,0 +1,16 @@
+{
+  "_authored_from": "reader_text",
+  "vendor_name": "Meridian Fieldworks Ltd.",
+  "invoice_number": "MF/71154",
+  "invoice_date": "2 May 2026",
+  "due_date": "2026-05-17",
+  "currency": "GBP",
+  "po_number": null,
+  "line_items": [
+    {"description": "Soil sampling kit", "quantity": 2, "unit_price": 47.82, "amount": 95.64},
+    {"description": "Reporting and drawings", "quantity": 2, "unit_price": 305.86, "amount": 611.72}
+  ],
+  "subtotal": 707.36,
+  "tax": 141.47,
+  "total": 848.83
+}

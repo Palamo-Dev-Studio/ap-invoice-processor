@@ -1,0 +1,23 @@
+{
+ "_authored_from": "reader_text",
+ "lines": [
+  {
+   "line": 0,
+   "account": "6100",
+   "confidence": 0.3,
+   "reason": "Hardware-store goods; no account fits well."
+  },
+  {
+   "line": 1,
+   "account": "6100",
+   "confidence": 0.3,
+   "reason": "Hand tools; no account fits well."
+  },
+  {
+   "line": 2,
+   "account": "6100",
+   "confidence": 0.25,
+   "reason": "Paint; no account fits well."
+  }
+ ]
+}

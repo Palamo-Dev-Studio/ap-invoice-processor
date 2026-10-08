@@ -1,0 +1,15 @@
+{
+  "_authored_from": "reader_text",
+  "vendor_name": "Northgate Ridge Supply Co.",
+  "invoice_number": "NR-37494",
+  "invoice_date": "2026-01-13",
+  "due_date": "2026-02-27",
+  "currency": "USD",
+  "po_number": null,
+  "line_items": [
+    {"description": "Packing tape, case of 36", "quantity": 2, "unit_price": 47.51, "amount": 95.02}
+  ],
+  "subtotal": 95.02,
+  "tax": 0.00,
+  "total": 95.02
+}

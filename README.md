@@ -156,6 +156,28 @@ PYTHONPATH=. pytest tests/
 
 ---
 
+## 📄 Optional Document Intake Path (reader → LLM extraction → LLM GL coder)
+
+Besides the simulated-extraction payloads above, the graph accepts a payload with a `document_path` (a PDF or image of an invoice). Payloads without `document_path` behave exactly as before.
+
+1. **Reader** (`ap_invoice_processor/reader.py`): turns the document into text with `pdftotext`, or Tesseract OCR for scans and photos (needs `pdftotext`, `pdftoppm` and `tesseract` on `PATH`; no network).
+2. **Extraction** (`ap_invoice_processor/llm/extraction.py`): the reader text goes to the configured LLM provider, which returns structured invoice fields. Field confidence on this path is presence-based (1.0 if the extraction returned a value, 0.0 if it left the field empty), not a model confidence. A document that cannot be read or extracted leaves empty fields at zero confidence, so the validator routes it to a human.
+3. **GL coder** (`ap_invoice_processor/llm/gl.py`): each line is coded against the chart of accounts. A line the provider cannot code validly (off-chart account, malformed or missing entry) falls back to the keyword coder, and the decision trail records per line which coder answered (`source`: `llm` or `keyword_fallback`) and why.
+
+**Provider.** `AP_LLM_PROVIDER` selects it: `fixture` (the default) serves hand-authored responses from `tests/fixtures/llm/`; `anthropic` calls Claude Haiku 5.5 (`claude-haiku-5-5`) through the official `anthropic` SDK, with the reply constrained to a JSON schema (structured outputs) and validated by the same extraction schema as the fixtures. Nothing makes a live call unless `AP_LLM_PROVIDER=anthropic` (or `--provider anthropic`) is set. The live provider needs `ANTHROPIC_API_KEY` and `AP_LLM_SPEND_CAP_USD`, read from the environment or from `~/.config/ap-intake/anthropic.env` (mode 600, never committed; `AP_INTAKE_ENV_FILE` points elsewhere); the file's own `AP_LLM_PROVIDER` line is ignored so holding the key never switches a run to live. Spend is tracked in a running total in `eval/out/spend.json` (gitignored). A call first reserves a conservative estimate (one per possible SDK attempt) in that total under a file lock and is refused if the total plus every pending reservation would pass the cap, so concurrent runs cannot overshoot it; the reservation is then replaced by the cost priced from the response `usage`, and it stays counted as spent when the outcome is unknown (a timeout, a dropped connection, a crash). Any failed, refused or truncated call surfaces as an extraction error (zero confidence, human review) or a keyword-coder fallback line; no value is ever filled in. The web dashboard does not surface `document_path` yet.
+
+**Synthetic corpus.** `data/corpus/` holds synthetic invoices (English and Spanish; PDFs plus scan and photo variants) with ground truth. See `data/corpus/README.md`; scans and photos are OCR'd with English plus Spanish data by default (`AP_OCR_LANGS` overrides; `chi_sim` and `chi_tra` are accepted options).
+
+**Offline eval.** `eval/extraction_eval.py` runs the path end to end over the corpus and scores it against ground truth:
+
+```bash
+PYTHONPATH=. python eval/extraction_eval.py
+```
+
+This is a plumbing check, not a model evaluation: the fixtures are hand-authored from reader text and no model runs, so its numbers are not model accuracy and must not be quoted as such. Details: [`eval/README_extraction_eval.md`](eval/README_extraction_eval.md).
+
+---
+
 ## 📂 Repository Structure
 
 ```text

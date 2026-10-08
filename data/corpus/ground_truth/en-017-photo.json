@@ -1,0 +1,41 @@
+{
+  "doc_id": "en-017-photo",
+  "base_doc_id": "en-017",
+  "source_file": "images/en-017-photo.png",
+  "language": "en",
+  "variant": "photo",
+  "layout": "twocol",
+  "vendor_name": "Harborview Print & Signage",
+  "vendor_id": null,
+  "invoice_number": "HP56902",
+  "invoice_date": "2026-04-25",
+  "due_date": "2026-05-25",
+  "currency": "USD",
+  "subtotal": 864.44,
+  "tax_rate": 0.07,
+  "tax": 60.51,
+  "total": 924.95,
+  "total_display": "$924.95",
+  "po_number": null,
+  "line_items": [
+    {
+      "description": "Vinyl banner 3x8ft",
+      "quantity": 2,
+      "unit_price": 133.69,
+      "amount": 267.38
+    },
+    {
+      "description": "Business cards, box of 500",
+      "quantity": 2,
+      "unit_price": 40.13,
+      "amount": 80.26
+    },
+    {
+      "description": "Foam board posters 24x36",
+      "quantity": 20,
+      "unit_price": 25.84,
+      "amount": 516.8
+    }
+  ],
+  "ocr_lang": "eng"
+}

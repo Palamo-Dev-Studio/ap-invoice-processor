@@ -1,0 +1,34 @@
+{
+  "doc_id": "en-015",
+  "base_doc_id": "en-015",
+  "source_file": "pdf/en-015.pdf",
+  "language": "en",
+  "variant": "pdf",
+  "layout": "letter",
+  "vendor_name": "Copperline Logistics Inc.",
+  "vendor_id": null,
+  "invoice_number": "CL-3905-26",
+  "invoice_date": "2026-09-05",
+  "due_date": null,
+  "currency": "USD",
+  "subtotal": 778.37,
+  "tax_rate": 0.0,
+  "tax": 0.0,
+  "total": 778.37,
+  "total_display": "$778.37",
+  "po_number": "PO-7867",
+  "line_items": [
+    {
+      "description": "Storage, per pallet per week",
+      "quantity": 16,
+      "unit_price": 17.48,
+      "amount": 279.68
+    },
+    {
+      "description": "Freight, LTL Savannah to Columbus",
+      "quantity": 1,
+      "unit_price": 498.69,
+      "amount": 498.69
+    }
+  ]
+}

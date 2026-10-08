@@ -1,0 +1,17 @@
+{
+  "_authored_from": "reader_text",
+  "vendor_name": "Ferretería Los Álamos S.A. de C.V.",
+  "invoice_number": "FA-67041",
+  "invoice_date": "2026-06-11",
+  "due_date": null,
+  "currency": "MXN",
+  "po_number": "OC-2026-2731",
+  "line_items": [
+    {"description": "Tornillería surtida, caja", "quantity": 12, "unit_price": 407.31, "amount": 4887.72},
+    {"description": "Pintura vinílica, cubeta 19 L", "quantity": 2, "unit_price": 1419.89, "amount": 2839.78},
+    {"description": "Cable calibre 12, rollo 100 m", "quantity": 1, "unit_price": 1245.60, "amount": 1245.60}
+  ],
+  "subtotal": 8973.10,
+  "tax": 1435.70,
+  "total": 10408.80
+}

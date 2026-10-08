@@ -1,0 +1,33 @@
+Ferretería Los Álamos S.A. de C.V.                                FACTURA
+Av. Revolución 1450, Col. Centro
+Guadalajara, Jal. 44100
+
+
+
+
+N.º de factura:          FA-67041                   FACTURAR A
+Fecha de emisión:        11/06/2026                 Cedar & Finch Operaciones S.A.
+Orden de compra:         OC-2026-2731               Calle Demostración 200
+                                                    Ejemplópolis 00000
+
+
+
+
+ Descripción                                  Cant.        Precio unit.          Importe
+
+ Tornillería surtida, caja                         12          $407.31         $4,887.72
+
+ Pintura vinílica, cubeta 19 L                      2        $1,419.89         $2,839.78
+
+ Cable calibre 12, rollo 100 m                      1        $1,245.60         $1,245.60
+
+
+                                        Subtotal                              $8,973.10
+                                        IVA (16%)                             $1,435.70
+                                        Total (MXN)                        $10,408.80
+
+
+
+
+Gracias por su preferencia.
+

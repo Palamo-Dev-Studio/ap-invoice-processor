@@ -1,0 +1,40 @@
+{
+  "doc_id": "en-001",
+  "base_doc_id": "en-001",
+  "source_file": "pdf/en-001.pdf",
+  "language": "en",
+  "variant": "pdf",
+  "layout": "twocol",
+  "vendor_name": "Harborview Print & Signage",
+  "vendor_id": null,
+  "invoice_number": "HP90867",
+  "invoice_date": "2026-01-21",
+  "due_date": "2026-03-07",
+  "currency": "USD",
+  "subtotal": 985.84,
+  "tax_rate": 0.0,
+  "tax": 0.0,
+  "total": 985.84,
+  "total_display": "$985.84",
+  "po_number": "PO-7048",
+  "line_items": [
+    {
+      "description": "Foam board posters 24x36",
+      "quantity": 11,
+      "unit_price": 26.74,
+      "amount": 294.14
+    },
+    {
+      "description": "Business cards, box of 500",
+      "quantity": 5,
+      "unit_price": 41.56,
+      "amount": 207.8
+    },
+    {
+      "description": "Installation labour, hourly",
+      "quantity": 6,
+      "unit_price": 80.65,
+      "amount": 483.9
+    }
+  ]
+}

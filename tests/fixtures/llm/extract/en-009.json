@@ -1,0 +1,18 @@
+{
+  "_authored_from": "reader_text",
+  "vendor_name": "Tidewell Office Furniture",
+  "invoice_number": "TW-99943",
+  "invoice_date": "2026-08-23",
+  "due_date": null,
+  "currency": "USD",
+  "po_number": null,
+  "line_items": [
+    {"description": "Delivery and assembly", "quantity": 1, "unit_price": 185.56, "amount": 185.56},
+    {"description": "Task chair, mesh back", "quantity": 5, "unit_price": 239.77, "amount": 1198.85},
+    {"description": "Monitor arm, dual", "quantity": 5, "unit_price": 77.01, "amount": 385.05},
+    {"description": "Height-adjustable desk", "quantity": 6, "unit_price": 460.57, "amount": 2763.42}
+  ],
+  "subtotal": 4532.88,
+  "tax": 373.96,
+  "total": 4906.84
+}

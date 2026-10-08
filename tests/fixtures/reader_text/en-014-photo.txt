@@ -1,0 +1,39 @@
+Brightwater Janitorial LLC INVOICE
+
+88 Tamarack Lane
+Dunmore, PA 18500
+
+Invoice No.: BW078468 BILL TO
+Invoice Date: 20 Mar 2026 Cedar & Finch Operating Co.
+Due Date: 4 Apr 2026 200 Demo Boulevard
+
+PO Number: PO-7377 Exampleton, ST 00000
+
+Description Unit Price Amount
+Restroom supply restock $108.67 $108.67
+Monthly cleaning service, Suite 200 $1,270.77 $1,270.77
+Subtotal $1,379.44
+Tax (8.25%) $113.80
+Total (USD) $1,493.24
+
+Terms: Net 15
+Thank you for your business.
+
+INVO!
+
+Invoice No.: BW078468 BILL TO
+Invoice Date: 20 Mar 2026 Cedar & Finch Operating Co.
+Due Date: 4 Apr 2026 200 Demo Boulevard
+
+PO Number: PO-7377 Exampleton, ST 00000
+
+Restroom supply restock $108.67 $108.67
+
+Monthly cleaning service, Suite 200 $1,270.77 $1,270.77
+Subtotal $1,379.44
+Tax (8.25%) $113.80
+Total (USD) $1,493.24
+
+Terms: Net 15
+
+Thank you for your business.

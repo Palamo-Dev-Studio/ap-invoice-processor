@@ -1,0 +1,16 @@
+{
+  "_authored_from": "reader_text",
+  "vendor_name": "Larkspur Catering Group",
+  "invoice_number": "LC-7821",
+  "invoice_date": "2026-05-04",
+  "due_date": null,
+  "currency": "USD",
+  "po_number": "PO-7063",
+  "line_items": [
+    {"description": "Working lunch, per head", "quantity": 23, "unit_price": 16.44, "amount": 378.12},
+    {"description": "Equipment rental", "quantity": 1, "unit_price": 105.66, "amount": 105.66}
+  ],
+  "subtotal": 483.78,
+  "tax": 39.91,
+  "total": 523.69
+}

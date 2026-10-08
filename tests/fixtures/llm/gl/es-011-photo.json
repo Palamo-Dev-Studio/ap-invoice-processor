@@ -1,0 +1,17 @@
+{
+ "_authored_from": "reader_text",
+ "lines": [
+  {
+   "line": 0,
+   "account": "6500",
+   "confidence": 0.85,
+   "reason": "Printed brochures."
+  },
+  {
+   "line": 1,
+   "account": "6500",
+   "confidence": 0.9,
+   "reason": "Advertising banners."
+  }
+ ]
+}

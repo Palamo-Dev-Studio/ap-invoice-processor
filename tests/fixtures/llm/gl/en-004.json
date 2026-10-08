@@ -1,0 +1,23 @@
+{
+ "_authored_from": "reader_text",
+ "lines": [
+  {
+   "line": 0,
+   "account": "6500",
+   "confidence": 0.85,
+   "reason": "Creative design hours for marketing material."
+  },
+  {
+   "line": 1,
+   "account": "6500",
+   "confidence": 0.95,
+   "reason": "Advertising spend."
+  },
+  {
+   "line": 2,
+   "account": "6500",
+   "confidence": 0.7,
+   "reason": "Marketing landing page; could be a web development service."
+  }
+ ]
+}

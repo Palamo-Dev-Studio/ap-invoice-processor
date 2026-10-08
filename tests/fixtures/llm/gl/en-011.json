@@ -1,0 +1,23 @@
+{
+ "_authored_from": "reader_text",
+ "lines": [
+  {
+   "line": 0,
+   "account": "6200",
+   "confidence": 0.25,
+   "reason": "Travel charge on a services invoice; no account fits well."
+  },
+  {
+   "line": 1,
+   "account": "6200",
+   "confidence": 0.85,
+   "reason": "Professional reporting and drawing services."
+  },
+  {
+   "line": 2,
+   "account": "6100",
+   "confidence": 0.3,
+   "reason": "Field supplies; no account fits well."
+  }
+ ]
+}

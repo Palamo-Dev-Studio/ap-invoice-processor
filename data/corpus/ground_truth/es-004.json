@@ -1,0 +1,34 @@
+{
+  "doc_id": "es-004",
+  "base_doc_id": "es-004",
+  "source_file": "pdf/es-004.pdf",
+  "language": "es",
+  "variant": "pdf",
+  "layout": "letter",
+  "vendor_name": "Distribuidora Costa Verde S.L.",
+  "vendor_id": null,
+  "invoice_number": "DCV-2026/2078",
+  "invoice_date": "2026-09-11",
+  "due_date": "2026-09-26",
+  "currency": "EUR",
+  "subtotal": 1620.87,
+  "tax_rate": 0.1,
+  "tax": 162.09,
+  "total": 1782.96,
+  "total_display": "1.782,96 €",
+  "po_number": "OC-2026-1927",
+  "line_items": [
+    {
+      "description": "Envases reutilizables",
+      "quantity": 25,
+      "unit_price": 7.35,
+      "amount": 183.75
+    },
+    {
+      "description": "Aceite de oliva, caja 12 L",
+      "quantity": 18,
+      "unit_price": 79.84,
+      "amount": 1437.12
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+ "_authored_from": "reader_text",
+ "lines": [
+  {
+   "line": 0,
+   "account": "6200",
+   "confidence": 0.25,
+   "reason": "Transport service; no account fits well."
+  },
+  {
+   "line": 1,
+   "account": "6100",
+   "confidence": 0.3,
+   "reason": "Containers; no account fits well."
+  },
+  {
+   "line": 2,
+   "account": "6100",
+   "confidence": 0.15,
+   "reason": "Food product; no account fits."
+  }
+ ]
+}

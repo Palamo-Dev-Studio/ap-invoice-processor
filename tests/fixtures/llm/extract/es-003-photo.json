@@ -1,0 +1,16 @@
+{
+  "_authored_from": "reader_text",
+  "_damage_note": "accent damage in the vendor name, copied as printed in the OCR text; the first OCR pass also reads the quantity as 2 (a dropped digit, OCR noise) while the second reads 22, which agrees with unit price x quantity = amount, so the quantity is 22",
+  "vendor_name": "Papeleria El Roble S.A.",
+  "invoice_number": "PR-025672",
+  "invoice_date": "2026-09-25",
+  "due_date": "2026-10-10",
+  "currency": "USD",
+  "po_number": null,
+  "line_items": [
+    {"description": "Carpetas archivadoras, paquete", "quantity": 22, "unit_price": 14.42, "amount": 317.24}
+  ],
+  "subtotal": 317.24,
+  "tax": 0.00,
+  "total": 317.24
+}

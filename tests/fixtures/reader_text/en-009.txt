@@ -1,0 +1,27 @@
+ INVOICE                                                                   Tidewell Office Furniture
+                                                                                          301 Kestrel Avenue
+                                                                                          Tacoma, WA 98402
+
+
+
+
+INVOICE NO.
+TW-99943                       Description                      Qty          Unit Price           Amount
+
+INVOICE DATE                   Delivery and assembly               1           $185.56             $185.56
+2026-08-23
+                               Task chair, mesh back               5           $239.77           $1,198.85
+
+BILL TO                        Monitor arm, dual                   5            $77.01             $385.05
+Cedar & Finch Operating Co.
+200 Demo Boulevard             Height-adjustable desk              6           $460.57           $2,763.42
+Exampleton, ST 00000
+                                                             Subtotal                           $4,532.88
+                                                             Tax (8.25%)                          $373.96
+                                                             Total (USD)                      $4,906.84
+
+
+
+
+                              Thank you for your business.
+

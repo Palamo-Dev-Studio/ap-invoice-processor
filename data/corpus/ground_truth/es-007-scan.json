@@ -1,0 +1,29 @@
+{
+  "doc_id": "es-007-scan",
+  "base_doc_id": "es-007",
+  "source_file": "images/es-007-scan.png",
+  "language": "es",
+  "variant": "scan",
+  "layout": "letter",
+  "vendor_name": "Consultoría Estrella del Norte S.C.",
+  "vendor_id": null,
+  "invoice_number": "CEN-6484",
+  "invoice_date": "2026-06-07",
+  "due_date": null,
+  "currency": "MXN",
+  "subtotal": 4048.78,
+  "tax_rate": 0.16,
+  "tax": 647.8,
+  "total": 4696.58,
+  "total_display": "$4,696.58",
+  "po_number": null,
+  "line_items": [
+    {
+      "description": "Informe ejecutivo",
+      "quantity": 1,
+      "unit_price": 4048.78,
+      "amount": 4048.78
+    }
+  ],
+  "ocr_lang": "eng"
+}

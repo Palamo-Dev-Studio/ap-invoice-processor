@@ -1,0 +1,17 @@
+{
+ "_authored_from": "reader_text",
+ "lines": [
+  {
+   "line": 0,
+   "account": "6200",
+   "confidence": 0.2,
+   "reason": "Transport waiting charge; no account fits."
+  },
+  {
+   "line": 1,
+   "account": "6200",
+   "confidence": 0.25,
+   "reason": "Loading and unloading service; no account fits well."
+  }
+ ]
+}

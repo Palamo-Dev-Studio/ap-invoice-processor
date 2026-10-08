@@ -10,3 +10,4 @@ scratch/
 .env
 *.env
 .vscode/
+eval/out/

@@ -1,0 +1,18 @@
+{
+  "_authored_from": "reader_text",
+  "_damage_note": "vendor name is truncated to 'Harborv' in the OCR text",
+  "vendor_name": "Harborv",
+  "invoice_number": "HP56902",
+  "invoice_date": "2026-04-25",
+  "due_date": "2026-05-25",
+  "currency": "USD",
+  "po_number": null,
+  "line_items": [
+    {"description": "Vinyl banner 3x8ft", "quantity": 2, "unit_price": 133.69, "amount": 267.38},
+    {"description": "Business cards, box of 500", "quantity": 2, "unit_price": 40.13, "amount": 80.26},
+    {"description": "Foam board posters 24x36", "quantity": 20, "unit_price": 25.84, "amount": 516.80}
+  ],
+  "subtotal": 864.44,
+  "tax": 60.51,
+  "total": 924.95
+}

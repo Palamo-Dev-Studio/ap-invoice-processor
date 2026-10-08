@@ -1,0 +1,47 @@
+{
+  "doc_id": "en-005-scan",
+  "base_doc_id": "en-005",
+  "source_file": "images/en-005-scan.png",
+  "language": "en",
+  "variant": "scan",
+  "layout": "classic",
+  "vendor_name": "Quillstone Software Services",
+  "vendor_id": null,
+  "invoice_number": "QS-077306",
+  "invoice_date": "2026-06-05",
+  "due_date": null,
+  "currency": "GBP",
+  "subtotal": 3923.05,
+  "tax_rate": 0.2,
+  "tax": 784.61,
+  "total": 4707.66,
+  "total_display": "£4,707.66",
+  "po_number": "PO-7698",
+  "line_items": [
+    {
+      "description": "Additional seats",
+      "quantity": 5,
+      "unit_price": 29.16,
+      "amount": 145.8
+    },
+    {
+      "description": "Onboarding workshop, half day",
+      "quantity": 2,
+      "unit_price": 1221.09,
+      "amount": 2442.18
+    },
+    {
+      "description": "Platform subscription, monthly",
+      "quantity": 1,
+      "unit_price": 1072.02,
+      "amount": 1072.02
+    },
+    {
+      "description": "Priority support add-on",
+      "quantity": 1,
+      "unit_price": 263.05,
+      "amount": 263.05
+    }
+  ],
+  "ocr_lang": "eng"
+}
