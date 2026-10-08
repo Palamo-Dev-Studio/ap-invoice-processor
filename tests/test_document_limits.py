@@ -1,8 +1,9 @@
-# ABOUTME: Tests for the reader's resource limits: the AP_MAX_PDF_PAGES cap, the pdftoppm page range and the raster size ceiling.
+# ABOUTME: Tests for the reader's resource limits: the page cap, the pdftoppm page range, the raster ceiling and the subprocess memory cap.
 # ABOUTME: Unit tests fake the subprocess layer; tests marked needs_poppler also drive the real pdfinfo and pdftoppm.
 import shutil
 import struct
 import subprocess
+import sys
 
 import pytest
 
@@ -28,6 +29,7 @@ class FakeTools:
 
     def __init__(self, monkeypatch, pages=1, sizes=None, pdf_text="", pdfinfo_returncode=0):
         self.calls = []
+        self.kwargs = []
         self.pages = pages
         self.sizes = sizes if sizes is not None else [(612, 792)] * pages
         self.pdf_text = pdf_text
@@ -36,6 +38,7 @@ class FakeTools:
 
     def run(self, cmd, **kwargs):
         self.calls.append(list(cmd))
+        self.kwargs.append(dict(kwargs))
         if cmd[0] == "pdfinfo":
             if self.pdfinfo_returncode:
                 return subprocess.CompletedProcess(cmd, self.pdfinfo_returncode, stdout="", stderr="Syntax Error")
@@ -55,6 +58,9 @@ class FakeTools:
 
     def first(self, tool):
         return next(c for c in self.calls if c[0] == tool)
+
+    def kwargs_of(self, tool):
+        return [kw for call, kw in zip(self.calls, self.kwargs) if call[0] == tool]
 
 
 @pytest.fixture
@@ -124,6 +130,32 @@ def test_pdf_info_turns_a_failed_or_unreadable_pdfinfo_into_a_reader_error(monke
     monkeypatch.setattr(reader.subprocess, "run", garbage)
     with pytest.raises(ReaderError, match="page"):
         reader.pdf_info(pdf_file, last_page=1)
+
+
+def _fixed_pdfinfo(monkeypatch, stdout):
+    monkeypatch.setattr(
+        reader.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, stdout=stdout, stderr="")
+    )
+
+
+def test_pdf_info_reads_page_sizes_that_pdfinfo_prints_in_exponent_notation(monkeypatch, pdf_file):
+    # pdfinfo prints a size of 1e6 points or more as "1e+06"; a regex that only knows plain decimals drops that page.
+    FakeTools(monkeypatch, pages=3, sizes=[(612, 792), ("1e+06", 144), ("1.5E+07", 99)])
+    assert reader.pdf_info(pdf_file, last_page=3).longest_edge_pts == 1.5e7
+
+
+def test_pdf_info_refuses_output_that_lists_fewer_page_sizes_than_pages_asked_for(monkeypatch, pdf_file):
+    _fixed_pdfinfo(monkeypatch, _pdfinfo_output(3, [(612, 792), (612, 792)]))  # 3 pages asked for, 2 listed
+    with pytest.raises(ReaderError, match="2 page sizes.*3"):
+        reader.pdf_info(pdf_file, last_page=3)
+
+
+def test_pdf_info_expects_one_size_line_per_page_up_to_the_last_page_asked_for(monkeypatch, pdf_file):
+    _fixed_pdfinfo(monkeypatch, _pdfinfo_output(5, [(612, 792)] * 2))  # asked for pages 1-2 of 5: two lines is right
+    assert reader.pdf_info(pdf_file, last_page=2).pages == 5
+    _fixed_pdfinfo(monkeypatch, _pdfinfo_output(1, [(612, 792)] * 2))  # a 1-page file listing 2 sizes is not
+    with pytest.raises(ReaderError, match="2 page sizes.*1"):
+        reader.pdf_info(pdf_file, last_page=3)
 
 
 # --- page cap in read_document ----------------------------------------------------------------------------------------
@@ -203,6 +235,24 @@ def test_the_largest_page_of_a_mixed_pdf_sets_the_resolution(monkeypatch, pdf_fi
     assert 7200 / 72 * _pdftoppm_dpi(tools) <= 2500
 
 
+def test_pdftoppm_renders_the_crop_box_pdfinfo_measured_and_never_more_than_the_ceiling_per_page(monkeypatch, pdf_file):
+    monkeypatch.delenv(reader.MAX_PDF_PAGES_ENV, raising=False)
+    tools = FakeTools(monkeypatch)
+    read_document(pdf_file)
+    argv = tools.first("pdftoppm")
+    assert "-cropbox" in argv
+    for flag, value in (("-x", "0"), ("-y", "0"), ("-W", "2500"), ("-H", "2500")):
+        assert argv[argv.index(flag) + 1] == value
+    assert reader.MAX_RASTER_EDGE_PX == 2500
+
+
+def test_a_page_size_in_exponent_notation_still_lowers_the_resolution(monkeypatch, pdf_file):
+    monkeypatch.delenv(reader.MAX_PDF_PAGES_ENV, raising=False)
+    tools = FakeTools(monkeypatch, sizes=[("1e+06", 144)])
+    read_document(pdf_file)
+    assert 1e6 / 72 * _pdftoppm_dpi(tools) <= 2500
+
+
 def test_an_unreadable_page_size_stops_the_rasterisation(monkeypatch, pdf_file):
     monkeypatch.delenv(reader.MAX_PDF_PAGES_ENV, raising=False)
     tools = FakeTools(monkeypatch, pdfinfo_returncode=1)
@@ -263,3 +313,106 @@ def test_the_real_rasteriser_stops_at_the_cap(monkeypatch, tmp_path):
     assert len(_rasterised_sizes(monkeypatch, tmp_path, make_pdf(pages=3))) == 3
     with pytest.raises(ReaderError, match="4 pages"):
         _rasterised_sizes(monkeypatch, tmp_path, make_pdf(pages=4))
+
+
+@needs_poppler
+def test_the_real_rasteriser_renders_the_crop_box_not_the_larger_media_box(monkeypatch, tmp_path):
+    # pdfinfo measures the CropBox (letter, so 150 dpi) while pdftoppm renders the MediaBox unless told to use the CropBox.
+    monkeypatch.delenv(reader.MAX_PDF_PAGES_ENV, raising=False)
+    pdf = make_pdf(width_pts=14400, height_pts=14400, crop_box=(612, 792))
+    assert _rasterised_sizes(monkeypatch, tmp_path, pdf) == [(1275, 1650)]
+
+
+@needs_poppler
+def test_the_real_pdfinfo_and_rasteriser_handle_a_page_size_pdfinfo_prints_in_exponent_notation(monkeypatch, tmp_path):
+    monkeypatch.delenv(reader.MAX_PDF_PAGES_ENV, raising=False)
+    path = tmp_path / "wide.pdf"
+    path.write_bytes(make_pdf(page_sizes=[(612, 792), (1000000, 144)]))
+    assert reader.pdf_info(str(path), last_page=2).longest_edge_pts == 1e6
+    sizes = _rasterised_sizes(monkeypatch, tmp_path, path.read_bytes())
+    assert len(sizes) == 2 and max(max(s) for s in sizes) <= 2500
+
+
+@needs_poppler
+def test_the_rasteriser_bounds_every_page_even_when_the_predicted_resolution_is_wrong(monkeypatch, tmp_path):
+    # Nothing here trusts the pdfinfo prediction: it is forced to 150 dpi for a 5000-point page, which would be 10417 px.
+    monkeypatch.delenv(reader.MAX_PDF_PAGES_ENV, raising=False)
+    monkeypatch.setattr(reader, "_raster_dpi", lambda longest_edge_pts: "150")
+    sizes = _rasterised_sizes(monkeypatch, tmp_path, make_pdf(width_pts=5000, height_pts=5000))
+    assert sizes == [(2500, 2500)]
+
+
+# --- the memory cap on every reader subprocess -------------------------------------------------------------------------
+
+
+class RlimitRecorder:
+    """Stands in for reader.resource.setrlimit and records each call."""
+
+    def __init__(self, monkeypatch):
+        self.calls = []
+        monkeypatch.setattr(reader.resource, "setrlimit", lambda which, limits: self.calls.append((which, limits)))
+
+
+def test_the_memory_cap_comes_from_the_environment_and_otherwise_is_one_gibibyte(monkeypatch):
+    monkeypatch.delenv(reader.SUBPROCESS_MAX_BYTES_ENV, raising=False)
+    assert reader.configured_subprocess_max_bytes() == 1024**3 == reader.DEFAULT_SUBPROCESS_MAX_BYTES
+    monkeypatch.setenv(reader.SUBPROCESS_MAX_BYTES_ENV, "2000000000")
+    assert reader.configured_subprocess_max_bytes() == 2_000_000_000
+
+
+@pytest.mark.parametrize("value", ["", "lots", "0", "-5", "1.5"])
+def test_an_unusable_memory_cap_value_falls_back_to_the_default(monkeypatch, value):
+    monkeypatch.setenv(reader.SUBPROCESS_MAX_BYTES_ENV, value)
+    assert reader.configured_subprocess_max_bytes() == reader.DEFAULT_SUBPROCESS_MAX_BYTES
+
+
+def test_on_linux_every_reader_tool_runs_with_an_address_space_limit(monkeypatch, pdf_file):
+    monkeypatch.setattr(reader.sys, "platform", "linux")
+    monkeypatch.setenv(reader.SUBPROCESS_MAX_BYTES_ENV, "123456789")
+    monkeypatch.setenv(reader.MAX_PDF_PAGES_ENV, "3")  # makes the reader call pdfinfo as well as pdftoppm and tesseract
+    tools = FakeTools(monkeypatch)
+    read_document(pdf_file)
+    assert {"pdfinfo", "pdftotext", "pdftoppm", "tesseract"} <= set(tools.names())
+    rlimit = RlimitRecorder(monkeypatch)
+    for tool in ("pdfinfo", "pdftotext", "pdftoppm", "tesseract"):
+        for kwargs in tools.kwargs_of(tool):
+            hook = kwargs["preexec_fn"]
+            assert callable(hook), f"{tool} runs without a memory limit"
+            hook()
+    assert rlimit.calls and set(rlimit.calls) == {(reader.resource.RLIMIT_AS, (123456789, 123456789))}
+
+
+def test_the_memory_limit_hook_is_not_installed_off_linux(monkeypatch, pdf_file):
+    # macOS rejects RLIMIT_AS outright, so a hook there would make every subprocess fail to start.
+    monkeypatch.setattr(reader.sys, "platform", "darwin")
+    tools = FakeTools(monkeypatch)
+    read_document(pdf_file)
+    assert tools.calls and all(kw["preexec_fn"] is None for kw in tools.kwargs)
+
+
+def test_a_subprocess_that_cannot_be_limited_is_a_reader_error(monkeypatch, pdf_file):
+    monkeypatch.setattr(reader.sys, "platform", "linux")
+
+    def refuse(cmd, **kwargs):
+        raise subprocess.SubprocessError("Exception occurred in preexec_fn.")
+
+    monkeypatch.setattr(reader.subprocess, "run", refuse)
+    with pytest.raises(ReaderError, match="pdftotext.*preexec"):
+        reader._pdf_text(pdf_file)
+
+
+def test_a_tool_killed_by_a_signal_is_a_reader_error_that_names_the_memory_limit(monkeypatch, pdf_file):
+    monkeypatch.setattr(
+        reader.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, -11, stdout="", stderr="")
+    )
+    with pytest.raises(ReaderError, match="signal 11.*memory limit"):
+        reader._pdf_text(pdf_file)
+
+
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="RLIMIT_AS is only enforced on Linux, the Cloud Run container")
+def test_a_real_child_that_allocates_past_the_limit_is_stopped_and_reported(monkeypatch):
+    monkeypatch.setenv(reader.SUBPROCESS_MAX_BYTES_ENV, str(512 * 1024**2))
+    fits = reader._run([sys.executable, "-c", "x = bytearray(64 * 1024 * 1024)"])
+    assert fits.returncode == 0
+    with pytest.raises(ReaderError):
+        reader._run([sys.executable, "-c", "x = bytearray(1024 * 1024 * 1024)"])

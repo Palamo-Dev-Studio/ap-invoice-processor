@@ -13,7 +13,7 @@ from ap_invoice_processor.reader import ReaderError, configured_max_pdf_pages, p
 MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 # A small file can declare a huge image (a PNG of 40,000 x 40,000 white pixels is a few hundred KB), and OCR decodes it
 # to raw pixels. The dimensions are read from the header, so the check costs nothing and decodes nothing.
-MAX_IMAGE_PIXELS = 40_000_000
+MAX_IMAGE_PIXELS = 25_000_000
 # Page cap for an uploaded PDF unless AP_MAX_PDF_PAGES says otherwise; every page of a scan is rasterised and OCRed twice.
 DEFAULT_MAX_PDF_PAGES = 10
 # Extension -> the leading bytes a genuine file of that type starts with. The extension picks the reader branch and the

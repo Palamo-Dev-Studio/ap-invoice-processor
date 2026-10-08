@@ -485,7 +485,7 @@ def test_the_page_cap_follows_the_environment_in_the_web_layer(client, staging, 
     _wait_for(client, ok.json()["session_id"], {"paused", "completed", "error"})
 
 
-def test_an_image_over_forty_megapixels_is_refused_before_any_staging(client, staging):
+def test_an_image_over_twenty_five_megapixels_is_refused_before_any_staging(client, staging):
     response = _upload(client, "huge.png", png_header(10_000, 5_000), "image/png")
     assert response.status_code == 413
     assert "megapixel" in response.json()["detail"]

@@ -1,15 +1,31 @@
 # ABOUTME: Test helpers that build tiny well-formed PDF, PNG and JPEG byte strings with chosen page counts and dimensions.
 # ABOUTME: The PDFs are blank valid files for poppler; the PNG/JPEG outputs are header-only, enough for dimension checks.
 import struct
+from typing import Optional, Sequence, Tuple
 
 
-def make_pdf(pages: int = 1, width_pts: float = 612, height_pts: float = 792) -> bytes:
-    """A valid blank PDF with `pages` pages, each `width_pts` x `height_pts` points (72 points per inch)."""
+def make_pdf(
+    pages: int = 1,
+    width_pts: float = 612,
+    height_pts: float = 792,
+    crop_box: Optional[Tuple[float, float]] = None,
+    page_sizes: Optional[Sequence[Tuple[float, float]]] = None,
+) -> bytes:
+    """A valid blank PDF with `pages` pages, each `width_pts` x `height_pts` points (72 points per inch).
+
+    `crop_box` (width, height) adds a CropBox to every page, which pdfinfo reports in place of the MediaBox.
+    `page_sizes` gives one (width, height) MediaBox per page and replaces `pages`, `width_pts` and `height_pts`.
+    """
+    if page_sizes is not None:
+        pages = len(page_sizes)
+    else:
+        page_sizes = [(width_pts, height_pts)] * pages
+    crop = f" /CropBox [0 0 {crop_box[0]} {crop_box[1]}]" if crop_box else ""
     objects = [b"<< /Type /Catalog /Pages 2 0 R >>"]
     kids = " ".join(f"{3 + i} 0 R" for i in range(pages))
     objects.append(f"<< /Type /Pages /Kids [{kids}] /Count {pages} >>".encode())
-    for _ in range(pages):
-        objects.append(f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {width_pts} {height_pts}] >>".encode())
+    for width, height in page_sizes:
+        objects.append(f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {width} {height}]{crop} >>".encode())
     out = bytearray(b"%PDF-1.4\n")
     offsets = []
     for number, body in enumerate(objects, start=1):

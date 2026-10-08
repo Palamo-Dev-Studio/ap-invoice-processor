@@ -201,8 +201,8 @@ def test_a_sample_id_that_is_not_listed_is_refused(sample_id, private_tmp):
 # --- image pixel ceiling -----------------------------------------------------------------------------------------------
 
 
-def test_the_pixel_ceiling_is_forty_megapixels():
-    assert uploads.MAX_IMAGE_PIXELS == 40_000_000
+def test_the_pixel_ceiling_is_twenty_five_megapixels():
+    assert uploads.MAX_IMAGE_PIXELS == 25_000_000
 
 
 @pytest.mark.parametrize(
@@ -214,20 +214,20 @@ def test_the_pixel_ceiling_is_forty_megapixels():
         ("a.jpg", lambda w, h: jpeg_header(w, h, leading_segments=6)),
     ],
 )
-def test_an_image_of_exactly_forty_megapixels_is_accepted_and_one_more_pixel_is_not(filename, build):
-    assert uploads.validate_document(filename, build(8000, 5000))
-    assert uploads.validate_document(filename, build(5000, 8000))
+def test_an_image_of_exactly_twenty_five_megapixels_is_accepted_and_one_more_pixel_is_not(filename, build):
+    assert uploads.validate_document(filename, build(5000, 5000))
+    assert uploads.validate_document(filename, build(6250, 4000))
     # A JPEG dimension is 16 bits, so its extreme cases are 65535 pixels along one edge.
-    extremes = ((40_000_001, 1), (1, 40_000_001)) if filename.endswith("png") else ((65535, 611), (611, 65535))
-    for width, height in extremes + ((8001, 5000), (5000, 8001)):
+    extremes = ((25_000_001, 1), (1, 25_000_001)) if filename.endswith("png") else ((65535, 382), (382, 65535))
+    for width, height in extremes + ((5001, 5000), (5000, 5001)):
         with pytest.raises(UploadRejected) as err:
             uploads.validate_document(filename, build(width, height))
         assert err.value.status_code == 413
-        assert "40" in err.value.detail and "megapixel" in err.value.detail
+        assert "25" in err.value.detail and "megapixel" in err.value.detail
 
 
 def test_one_long_edge_alone_is_not_enough_to_trip_the_ceiling():
-    assert uploads.validate_document("a.png", png_header(30_000, 1_000))
+    assert uploads.validate_document("a.png", png_header(20_000, 1_000))
 
 
 @pytest.mark.parametrize(
