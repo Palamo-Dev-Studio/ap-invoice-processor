@@ -40,6 +40,7 @@ MODEL_ENV = "AP_LLM_MODEL"
 CAP_ENV = "AP_LLM_SPEND_CAP_USD"
 EFFORT_ENV = "AP_LLM_EFFORT"
 MAX_TOKENS_ENV = "AP_LLM_MAX_TOKENS"
+LEDGER_PATH_ENV = "AP_SPEND_LEDGER_PATH"
 
 # The prompts carry text read from invoices, which anyone can write into, so the model is told once, up front, that
 # it is data. This text is identical on every call.
@@ -251,8 +252,9 @@ def build_anthropic_provider(
     """Build the live provider from the environment, falling back to the secrets file for anything unset.
 
     Reads ANTHROPIC_API_KEY, AP_LLM_MODEL (default claude-haiku-5-5), AP_LLM_SPEND_CAP_USD (required, so no live
-    call can run uncapped), AP_LLM_EFFORT and AP_LLM_MAX_TOKENS. Environment variables win over the file, which is
-    ~/.config/ap-intake/anthropic.env unless AP_INTAKE_ENV_FILE or `env_file` says otherwise and is read only when
+    call can run uncapped), AP_LLM_EFFORT, AP_LLM_MAX_TOKENS and AP_SPEND_LEDGER_PATH (where the spend ledger lives;
+    the `ledger_path` argument wins over it, and eval/out/spend.json is the default). Environment variables win over
+    the file, which is ~/.config/ap-intake/anthropic.env unless AP_INTAKE_ENV_FILE or `env_file` says otherwise and is read only when
     something is missing from the environment. The file's AP_LLM_PROVIDER line is ignored on purpose: only the
     environment and the --provider flag choose a provider, so a machine that holds the key still runs fixtures
     unless asked. `max_usd` adds a cap on this run's own spend. Raises ProviderConfigError (a ValueError) for any
@@ -300,5 +302,6 @@ def build_anthropic_provider(
     client_args: Dict[str, Any] = {"api_key": api_key, "timeout": REQUEST_TIMEOUT_S, "max_retries": MAX_RETRIES}
     if http_client is not None:
         client_args["http_client"] = http_client
-    tracker = SpendTracker(ledger_path or DEFAULT_LEDGER_PATH, cap_usd=cap, run_cap_usd=run_cap)
+    ledger = ledger_path or lookup(LEDGER_PATH_ENV) or DEFAULT_LEDGER_PATH
+    tracker = SpendTracker(os.path.expanduser(ledger), cap_usd=cap, run_cap_usd=run_cap)
     return AnthropicProvider(anthropic.Anthropic(**client_args), tracker, model=model, effort=effort, max_tokens=max_tokens)
