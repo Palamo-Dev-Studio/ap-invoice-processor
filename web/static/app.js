@@ -11,8 +11,30 @@ let currentInvoiceState = null;
 let playbackIndex = 0;
 let playbackTimeout = null;
 
+// Subtitles the pipeline nodes show before a run; a run replaces them with what the decision trail says actually ran.
+const DEFAULT_NODE_SUBTITLES = {};
+
+// Text read from a document or typed by a reviewer is untrusted, so every dynamic value is escaped before it is
+// placed in innerHTML.
+function esc(value) {
+    return String(value === null || value === undefined ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.node-step').forEach(n => {
+        const sub = n.querySelector('.node-sub');
+        if (sub) DEFAULT_NODE_SUBTITLES[n.id.replace('node-', '')] = sub.textContent;
+    });
     fetchInvoices();
+    fetchConfig();
+    fetchSamples();
+    document.getElementById('btn-run-upload').addEventListener('click', startUploadRun);
+    document.getElementById('btn-run-sample').addEventListener('click', startSampleRun);
 
     document.getElementById('btn-approve').addEventListener('click', () => submitTriage('approved'));
     document.getElementById('btn-reject').addEventListener('click', () => submitTriage('rejected'));
@@ -27,6 +49,132 @@ async function fetchInvoices() {
     } catch (e) {
         console.error('Error fetching invoices:', e);
     }
+}
+
+async function fetchConfig() {
+    try {
+        const res = await fetch('/api/config');
+        const config = await res.json();
+        const note = document.getElementById('provider-note');
+        if (config.llm_provider === 'anthropic') {
+            note.textContent = 'Extraction and GL coding use a live LLM (Claude Haiku), spend-capped.';
+        } else {
+            note.textContent = 'Offline mode: only the synthetic samples have canned answers. An uploaded file that is not a sample goes to the Human Gate with empty fields.';
+        }
+    } catch (e) {
+        console.error('Error fetching config:', e);
+    }
+}
+
+async function fetchSamples() {
+    try {
+        const res = await fetch('/api/samples');
+        const samples = await res.json();
+        const select = document.getElementById('sample-select');
+        select.innerHTML = '';
+        samples.forEach(sample => {
+            const option = document.createElement('option');
+            option.value = sample.id;
+            option.textContent = sample.label;
+            select.appendChild(option);
+        });
+    } catch (e) {
+        console.error('Error fetching samples:', e);
+    }
+}
+
+function showUploadError(message) {
+    const box = document.getElementById('upload-error');
+    if (message) {
+        box.textContent = message;
+        box.classList.remove('hidden');
+    } else {
+        box.classList.add('hidden');
+    }
+}
+
+async function readError(res) {
+    try {
+        const body = await res.json();
+        if (typeof body.detail === 'string') return body.detail;
+    } catch (e) { /* not JSON */ }
+    return `The server answered ${res.status}.`;
+}
+
+function resetRunState() {
+    document.querySelectorAll('.invoice-item-card').forEach(c => c.classList.remove('active'));
+    currentInvoice = null;
+    resetWorkflowUI();
+    updateStatusBadge('running', 'Processing...');
+    currentTrail = [];
+    currentStatus = 'running';
+    currentPausedAtGate = false;
+    currentInvoiceState = null;
+    playbackIndex = 0;
+    lastRenderedTrailLen = -1;
+    if (playbackTimeout) {
+        clearTimeout(playbackTimeout);
+        playbackTimeout = null;
+    }
+}
+
+// Starts a document run: `send` performs the request and returns the fetch Response.
+async function startDocumentRun(send) {
+    showUploadError(null);
+    resetRunState();
+    try {
+        const res = await send();
+        if (!res.ok) {
+            updateStatusBadge('idle', 'Ready');
+            showUploadError(await readError(res));
+            return;
+        }
+        const data = await res.json();
+        activeSessionId = data.session_id;
+        if (pollInterval) clearInterval(pollInterval);
+        pollInterval = setInterval(pollSessionState, 800);
+        playNextStep();
+    } catch (e) {
+        console.error('Error starting document run:', e);
+        updateStatusBadge('idle', 'Error');
+        showUploadError('Could not reach the server.');
+    }
+}
+
+async function startUploadRun() {
+    const input = document.getElementById('upload-file');
+    if (!input.files || input.files.length === 0) {
+        showUploadError('Choose a PDF, PNG or JPEG file first.');
+        return;
+    }
+    const file = input.files[0];
+    if (file.size > 5 * 1024 * 1024) {
+        showUploadError('That file is larger than the 5 MB limit.');
+        return;
+    }
+    const body = new FormData();
+    body.append('file', file);
+    await startDocumentRun(() => fetch('/api/run-upload', { method: 'POST', body }));
+}
+
+async function startSampleRun() {
+    const sampleId = document.getElementById('sample-select').value;
+    if (!sampleId) {
+        showUploadError('No sample is available.');
+        return;
+    }
+    await startDocumentRun(() => fetch('/api/run-sample', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sample_id: sampleId })
+    }));
+}
+
+function applyNodeSubtitles(subtitles) {
+    Object.keys(DEFAULT_NODE_SUBTITLES).forEach(name => {
+        const elem = document.querySelector(`[id="node-${name}"] .node-sub`);
+        if (elem) elem.textContent = (subtitles && subtitles[name]) || DEFAULT_NODE_SUBTITLES[name];
+    });
 }
 
 function renderInvoiceList(invoices) {
@@ -183,6 +331,7 @@ async function pollSessionState() {
 
         currentStatus = state.status;
         currentPausedAtGate = state.is_paused_at_gate;
+        applyNodeSubtitles(state.node_subtitles);
         if (state.invoice_state) {
             currentInvoiceState = state.invoice_state;
             currentTrail = state.invoice_state.decision_trail || [];
@@ -415,16 +564,65 @@ function renderAuditTrail(trail) {
         div.className = 'trail-step-item';
         div.innerHTML = `
             <div class="trail-step-header">
-                <span class="trail-step-node">Step ${step.step_index}: ${step.node_name}</span>
+                <span class="trail-step-node">Step ${esc(step.step_index)}: ${esc(step.node_name)}</span>
                 <span style="font-size: 11px; color: var(--text-muted);">${step.confidence ? (step.confidence * 100).toFixed(0) + '% Conf' : ''}</span>
             </div>
-            <div class="trail-step-desc"><strong>${step.action}</strong></div>
-            <div class="trail-step-reason">${step.reasoning}</div>
+            <div class="trail-step-desc"><strong>${esc(step.action)}</strong></div>
+            <div class="trail-step-reason">${esc(step.reasoning)}</div>
         `;
         container.appendChild(div);
     });
     // Follow to the newest step only when a step was actually added — never fight a manual scroll.
     if (trailGrew) container.scrollTop = container.scrollHeight;
+}
+
+function trailStep(state, nodeName) {
+    return (state.decision_trail || []).find(s => s.node_name === nodeName);
+}
+
+function detailRow(label, value) {
+    return `<div class="doc-row">${esc(label)}: <strong>${esc(value)}</strong></div>`;
+}
+
+// Extracted fields, per-line GL reasons and validation results, shown for the steps that have run so far.
+function renderRunDetails(state, processedNodes) {
+    let html = '';
+    const fields = state.extracted_fields || {};
+    const confidence = state.field_confidence || {};
+    const intake = trailStep(state, 'Intake');
+    if (processedNodes.has('Extractor')) {
+        const reader = intake && intake.output_summary ? intake.output_summary.reader_method : null;
+        const failure = intake && intake.output_summary ? intake.output_summary.error : null;
+        html += '<div class="doc-section"><h4>Extracted fields</h4>';
+        if (reader) html += detailRow('Read with', reader);
+        html += detailRow('Invoice number', fields.invoice_number || 'not found');
+        html += detailRow('Date', fields.date || 'not found');
+        html += detailRow('PO number', fields.po_number || 'none');
+        html += detailRow('Confidence (vendor / number / date / total)',
+            [confidence.vendor_name, confidence.invoice_number, confidence.date, confidence.total_amount]
+                .map(c => (c === undefined ? '-' : Number(c).toFixed(2))).join(' / '));
+        if (failure) html += detailRow('Extraction problem', typeof failure === 'string' ? failure : (failure.message || JSON.stringify(failure)));
+        html += '</div>';
+    }
+    const gl = trailStep(state, 'GL-Coder');
+    if (processedNodes.has('GL-Coder') && gl && gl.output_summary && Array.isArray(gl.output_summary.lines)) {
+        const items = fields.line_items || [];
+        html += '<div class="doc-section"><h4>GL coding (per line)</h4>';
+        gl.output_summary.lines.forEach(line => {
+            const item = items[line.line] || {};
+            html += `<div class="doc-row">${esc(item.description || 'Line ' + line.line)}: <strong>GL ${esc(line.account)}</strong> <span style="color: var(--text-muted);">(${esc(line.source)}, confidence ${Number(line.confidence).toFixed(2)})</span><span class="doc-reason">${esc(line.reason)}</span></div>`;
+        });
+        html += '</div>';
+    }
+    const validator = trailStep(state, 'Policy-Validator');
+    if (processedNodes.has('Policy-Validator') && validator && validator.output_summary) {
+        const flags = validator.output_summary.flags || [];
+        html += '<div class="doc-section"><h4>Validation</h4>';
+        html += detailRow('Route', validator.output_summary.route_signal === 'auto_post' ? 'Auto-post' : 'Human review');
+        html += detailRow('Flags', flags.length ? flags.join(', ') : 'None');
+        html += '</div>';
+    }
+    return html;
 }
 
 function renderLiveDetails(state) {
@@ -433,7 +631,7 @@ function renderLiveDetails(state) {
     let postedBadge = '';
 
     if (state.posted_entry_id) {
-        postedBadge = `<div style="background: rgba(16, 185, 129, 0.2); border: 1px solid var(--success-green); color: var(--success-green); padding: 10px; border-radius: 6px; font-weight: 700; margin-top: 12px;">🏦 NetSuite Posted Transaction: ${state.posted_entry_id}</div>`;
+        postedBadge = `<div style="background: rgba(16, 185, 129, 0.2); border: 1px solid var(--success-green); color: var(--success-green); padding: 10px; border-radius: 6px; font-weight: 700; margin-top: 12px;">🏦 NetSuite Posted Transaction: ${esc(state.posted_entry_id)}</div>`;
     } else if (state.human_decision === 'rejected') {
         postedBadge = `<div style="background: rgba(239, 68, 68, 0.2); border: 1px solid var(--danger-red); color: var(--danger-red); padding: 10px; border-radius: 6px; font-weight: 700; margin-top: 12px;">❌ Posting Aborted: Human Rejected Entry</div>`;
     }
@@ -442,19 +640,20 @@ function renderLiveDetails(state) {
     if (state.extracted_fields && state.extracted_fields.line_items) {
         glSummary = state.extracted_fields.line_items.map(item => `
             <div style="font-size: 12px; display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
-                <span>${item.description} ($${item.amount.toFixed(2)})</span>
-                <span style="font-family: var(--font-mono); color: var(--accent-cyan);">GL ${item.gl_account || 'Pending'} (${item.department || ''})</span>
+                <span>${esc(item.description)} ($${item.amount.toFixed(2)})</span>
+                <span style="font-family: var(--font-mono); color: var(--accent-cyan);">GL ${esc(item.gl_account || 'Pending')} (${esc(item.department || '')})</span>
             </div>
         `).join('');
     }
 
     card.innerHTML = `
-        <h3 style="margin-bottom: 8px;">Live Shared State: ${state.invoice_id}</h3>
-        <div style="font-size: 13px; margin-bottom: 8px;">Vendor: <strong>${state.extracted_fields.vendor_name || 'N/A'}</strong> | Total: <strong>$${state.extracted_fields.total_amount ? state.extracted_fields.total_amount.toFixed(2) : '0.00'}</strong></div>
+        <h3 style="margin-bottom: 8px;">Live Shared State: ${esc(state.invoice_id)}</h3>
+        <div style="font-size: 13px; margin-bottom: 8px;">Vendor: <strong>${esc(state.extracted_fields.vendor_name || 'N/A')}</strong> | Total: <strong>$${state.extracted_fields.total_amount ? state.extracted_fields.total_amount.toFixed(2) : '0.00'}</strong></div>
         <div style="margin-top: 12px;">
             <h4 style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px;">GL Coded Line Items:</h4>
             ${glSummary}
         </div>
+        ${renderRunDetails(state, new Set((state.decision_trail || []).map(s => s.node_name)))}
         ${postedBadge}
     `;
 }
@@ -475,7 +674,7 @@ function renderLiveDetailsForStep(stepIndex) {
     let postedBadge = '';
     if (processedNodes.has('Poster')) {
         if (currentInvoiceState.posted_entry_id) {
-            postedBadge = `<div style="background: rgba(16, 185, 129, 0.2); border: 1px solid var(--success-green); color: var(--success-green); padding: 10px; border-radius: 6px; font-weight: 700; margin-top: 12px;">🏦 NetSuite Posted Transaction: ${currentInvoiceState.posted_entry_id}</div>`;
+            postedBadge = `<div style="background: rgba(16, 185, 129, 0.2); border: 1px solid var(--success-green); color: var(--success-green); padding: 10px; border-radius: 6px; font-weight: 700; margin-top: 12px;">🏦 NetSuite Posted Transaction: ${esc(currentInvoiceState.posted_entry_id)}</div>`;
         } else if (currentInvoiceState.human_decision === 'rejected') {
             postedBadge = `<div style="background: rgba(239, 68, 68, 0.2); border: 1px solid var(--danger-red); color: var(--danger-red); padding: 10px; border-radius: 6px; font-weight: 700; margin-top: 12px;">❌ Posting Aborted: Human Rejected Entry</div>`;
         }
@@ -485,14 +684,14 @@ function renderLiveDetailsForStep(stepIndex) {
     if (processedNodes.has('GL-Coder') && currentInvoiceState.extracted_fields && currentInvoiceState.extracted_fields.line_items) {
         glSummary = currentInvoiceState.extracted_fields.line_items.map(item => `
             <div style="font-size: 12px; display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
-                <span>${item.description} ($${item.amount.toFixed(2)})</span>
-                <span style="font-family: var(--font-mono); color: var(--accent-cyan);">GL ${item.gl_account || 'Pending'} (${item.department || ''})</span>
+                <span>${esc(item.description)} ($${item.amount.toFixed(2)})</span>
+                <span style="font-family: var(--font-mono); color: var(--accent-cyan);">GL ${esc(item.gl_account || 'Pending')} (${esc(item.department || '')})</span>
             </div>
         `).join('');
     } else if (currentInvoiceState.extracted_fields && currentInvoiceState.extracted_fields.line_items) {
         glSummary = currentInvoiceState.extracted_fields.line_items.map(item => `
             <div style="font-size: 12px; display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
-                <span>${item.description} ($${item.amount.toFixed(2)})</span>
+                <span>${esc(item.description)} ($${item.amount.toFixed(2)})</span>
                 <span style="font-family: var(--font-mono); color: var(--text-muted);">GL Pending</span>
             </div>
         `).join('');
@@ -502,12 +701,13 @@ function renderLiveDetailsForStep(stepIndex) {
     const total = processedNodes.has('Extractor') ? `$${currentInvoiceState.extracted_fields.total_amount ? currentInvoiceState.extracted_fields.total_amount.toFixed(2) : '0.00'}` : 'Calculating...';
 
     card.innerHTML = `
-        <h3 style="margin-bottom: 8px;">Live Shared State: ${currentInvoiceState.invoice_id}</h3>
-        <div style="font-size: 13px; margin-bottom: 8px;">Vendor: <strong>${vendor}</strong> | Total: <strong>${total}</strong></div>
+        <h3 style="margin-bottom: 8px;">Live Shared State: ${esc(currentInvoiceState.invoice_id)}</h3>
+        <div style="font-size: 13px; margin-bottom: 8px;">Vendor: <strong>${esc(vendor)}</strong> | Total: <strong>${total}</strong></div>
         <div style="margin-top: 12px;">
             <h4 style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px;">GL Coded Line Items:</h4>
             ${glSummary}
         </div>
+        ${renderRunDetails(currentInvoiceState, processedNodes)}
         ${postedBadge}
     `;
 }
@@ -524,5 +724,6 @@ function resetWorkflowUI() {
     document.querySelectorAll('.node-step').forEach(n => n.classList.remove('active', 'completed'));
     document.querySelectorAll('.pipeline-connector').forEach(c => c.classList.remove('active', 'completed'));
     document.querySelectorAll('.branch-connector').forEach(c => c.classList.remove('active', 'completed'));
+    applyNodeSubtitles(null);
     hideTriageDesk();
 }

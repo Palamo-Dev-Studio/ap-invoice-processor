@@ -1,0 +1,52 @@
+# Keeps secrets, run output and everything the dashboard does not need out of the build context and the image.
+# Anything that could hold a credential
+.env
+.env.*
+*.env
+**/.env
+**/.env.*
+**/*.env
+**/*.pem
+**/*.key
+.config
+.ssh
+.aws
+.gcloud
+
+# Run output and the spend ledger
+eval/out
+**/eval/out
+**/spend.json
+**/spend.json.lock
+
+# Version control, editor and tooling state
+.git
+.gitignore
+.github
+.claude
+.vscode
+.venv
+venv
+**/__pycache__
+**/*.pyc
+.pytest_cache
+scratch
+*.log
+
+# Not needed at runtime
+docs
+eval
+cli_demo.py
+README.md
+DEPLOY.md
+Dockerfile
+.dockerignore
+.gcloudignore
+data/corpus/ground_truth
+data/corpus/gl_labels.json
+data/corpus/generate_corpus.py
+data/generate_synthetic_data.py
+tests/*
+!tests/fixtures
+tests/fixtures/*
+!tests/fixtures/llm

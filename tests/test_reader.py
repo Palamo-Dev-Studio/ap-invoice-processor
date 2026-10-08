@@ -259,6 +259,8 @@ def test_pdf_ocr_fallback_uses_the_requested_languages(monkeypatch, tmp_path):
         calls.append(cmd)
         if cmd[0] == "pdftoppm":
             open(cmd[-1] + "-1.png", "wb").close()
+        if cmd[0] == "pdfinfo":
+            return subprocess.CompletedProcess(cmd, 0, stdout="Pages: 1\nPage    1 size:  612 x 792 pts (letter)\n", stderr="")
         return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
     monkeypatch.setattr(reader.subprocess, "run", fake_run)

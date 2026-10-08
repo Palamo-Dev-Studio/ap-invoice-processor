@@ -302,6 +302,40 @@ body {
     border-color: var(--accent-blue);
 }
 
+.custom-invoice-form select {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-md);
+    padding: 8px 10px;
+    color: #fff;
+    font-size: 13px;
+    font-family: var(--font-mono);
+}
+
+.custom-invoice-form .btn { margin-top: 8px; }
+
+.custom-error.hidden { display: none; }
+
+.demo-notice {
+    background: rgba(245, 158, 11, 0.15);
+    border: 1px solid var(--warning-amber);
+    color: var(--warning-amber);
+    border-radius: var(--radius-md);
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: center;
+}
+
+.doc-section { margin-top: 12px; }
+.doc-section h4 { font-size: 12px; color: var(--text-muted); margin-bottom: 6px; }
+.doc-row {
+    font-size: 12px;
+    padding: 4px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.doc-row .doc-reason { display: block; color: var(--text-muted); font-size: 11px; margin-top: 2px; }
+
 .custom-error {
     margin-top: 8px;
     font-size: 12px;
