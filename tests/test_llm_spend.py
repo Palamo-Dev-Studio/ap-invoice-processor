@@ -187,6 +187,17 @@ def test_the_total_persists_across_runs_and_the_run_counter_does_not(tmp_path):
     assert third.total_usd == D("2.0")
 
 
+def test_the_tracker_counts_this_runs_calls_separately_from_the_ledgers(tmp_path):
+    first = make(tmp_path)
+    first.record(D("0.1"))
+    first.record(D("0.1"))
+    second = make(tmp_path)
+    second.record(D("0.1"))
+    assert (first.run_calls, second.run_calls) == (2, 1)
+    with open(second.path, encoding="utf-8") as f:
+        assert json.load(f)["calls"] == 3
+
+
 def test_many_small_records_do_not_drift(tmp_path):
     t = make(tmp_path)
     for _ in range(1000):

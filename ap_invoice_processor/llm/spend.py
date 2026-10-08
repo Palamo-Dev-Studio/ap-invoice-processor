@@ -163,6 +163,7 @@ class SpendTracker:
         self.cap_usd = cap_usd
         self.run_cap_usd = run_cap_usd
         self.run_spent_usd = Decimal(0)
+        self.run_calls = 0
 
     # -- ledger file ------------------------------------------------------------------------------------------------
 
@@ -242,4 +243,5 @@ class SpendTracker:
             total = Decimal(current["total_usd"]) + cost_usd_
             self._write(total, current["calls"] + 1)
         self.run_spent_usd += cost_usd_
+        self.run_calls += 1
         return total
