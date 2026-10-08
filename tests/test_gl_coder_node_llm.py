@@ -140,12 +140,15 @@ def test_missing_gl_fixture_sends_every_line_to_the_keyword_fallback(saved_reade
     assert all(item["gl_account"] for item in state["extracted_fields"]["line_items"])
 
 
-def test_live_provider_stub_surfaces_at_the_gl_coder_not_a_silent_fallback(monkeypatch):
+def test_a_misconfigured_live_provider_surfaces_at_the_gl_coder_not_a_silent_fallback(monkeypatch, tmp_path):
     monkeypatch.setenv("AP_LLM_PROVIDER", "anthropic")
+    monkeypatch.setenv("AP_INTAKE_ENV_FILE", str(tmp_path / "absent.env"))
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("AP_LLM_SPEND_CAP_USD", raising=False)
     state = InvoiceState(invoice_id="x", document_id="en-001")
     state.extracted_fields.vendor_name = "Harborview Print & Signage"
     state.extracted_fields.line_items = [LineItem(description="Foam board posters", unit_price=1.0, amount=1.0)]
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(ValueError, match="ANTHROPIC_API_KEY"):
         gl_coder_node._func(DummyContext(), state.model_dump())
 
 

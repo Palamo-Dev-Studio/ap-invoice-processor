@@ -1,15 +1,15 @@
-# ABOUTME: Tests for the LLM provider layer: fixture provider, the live-provider stub, and provider selection.
-# ABOUTME: Includes checks that the stub makes no network call and that the provider module imports no SDK or HTTP client.
+# ABOUTME: Tests for the LLM provider layer: the fixture provider and provider selection.
+# ABOUTME: Includes checks that the provider module imports no SDK or HTTP client and that the live provider loads lazily.
 import ast
 import json
 import os
-import socket
+import subprocess
+import sys
 
 import pytest
 
 from ap_invoice_processor.llm import provider as provider_module
 from ap_invoice_processor.llm.provider import (
-    AnthropicProvider,
     FixtureProvider,
     LLMProvider,
     LLMProviderError,
@@ -57,27 +57,6 @@ def test_fixture_provider_rejects_non_object_and_unreadable_fixtures(tmp_path):
 
 def test_providers_satisfy_the_protocol(tmp_path):
     assert isinstance(FixtureProvider(str(tmp_path)), LLMProvider)
-    assert isinstance(AnthropicProvider(), LLMProvider)
-
-
-def test_anthropic_stub_raises_with_and_without_an_api_key(monkeypatch):
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
-    with pytest.raises(NotImplementedError, match="spend cap"):
-        AnthropicProvider().complete("extract", "p", "doc-1")
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    with pytest.raises(NotImplementedError, match="spend cap"):
-        AnthropicProvider().complete("extract", "p", "doc-1")
-
-
-def test_anthropic_stub_makes_no_network_call(monkeypatch):
-    def refuse(*args, **kwargs):
-        raise AssertionError("network access attempted")
-
-    monkeypatch.setattr(socket, "socket", refuse)
-    monkeypatch.setattr(socket, "create_connection", refuse)
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
-    with pytest.raises(NotImplementedError):
-        AnthropicProvider().complete("gl", "p", "doc-1")
 
 
 def test_provider_module_imports_no_sdk_or_http_client():
@@ -100,7 +79,10 @@ def test_get_provider_defaults_to_fixture(monkeypatch, tmp_path):
 
 def test_get_provider_reads_env(monkeypatch, tmp_path):
     monkeypatch.setenv("AP_LLM_PROVIDER", "anthropic")
-    assert isinstance(get_provider(), AnthropicProvider)
+    monkeypatch.setenv("AP_INTAKE_ENV_FILE", str(tmp_path / "absent.env"))
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
+    monkeypatch.setenv("AP_LLM_SPEND_CAP_USD", "10")
+    assert type(get_provider()).__name__ == "AnthropicProvider"
     monkeypatch.setenv("AP_LLM_PROVIDER", "FIXTURE")
     assert isinstance(get_provider(fixtures_dir=str(tmp_path)), FixtureProvider)
 
@@ -127,3 +109,17 @@ def test_fixtures_dir_env_override(monkeypatch, tmp_path):
     monkeypatch.delenv("AP_LLM_PROVIDER", raising=False)
     monkeypatch.setenv("AP_LLM_FIXTURES_DIR", str(tmp_path))
     assert get_provider().fixtures_dir == str(tmp_path)
+
+
+def test_importing_the_llm_package_does_not_load_the_anthropic_sdk():
+    code = "import sys, ap_invoice_processor.llm, ap_invoice_processor.llm.provider as p; assert 'anthropic' not in sys.modules"
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    result = subprocess.run([sys.executable, "-c", code], cwd=root, capture_output=True, text=True, env={**os.environ, "PYTHONPATH": root})
+    assert result.returncode == 0, result.stderr
+
+
+def test_the_live_provider_class_is_still_importable_from_the_provider_module_and_the_package():
+    from ap_invoice_processor.llm import AnthropicProvider as from_package
+    from ap_invoice_processor.llm.provider import AnthropicProvider as from_provider
+
+    assert from_package is from_provider

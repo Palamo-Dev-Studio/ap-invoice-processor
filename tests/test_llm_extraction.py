@@ -16,7 +16,7 @@ from ap_invoice_processor.llm.extraction import (
     build_extraction_prompt,
     extract_invoice,
 )
-from ap_invoice_processor.llm.provider import AnthropicProvider, FixtureProvider, LLMProviderError
+from ap_invoice_processor.llm.provider import FixtureProvider, LLMProviderError
 from ap_invoice_processor.reader import ReaderOutput, read_document
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -209,10 +209,9 @@ def test_provider_error_is_wrapped():
     assert exc.value.stage == "provider"
 
 
-def test_unimplemented_live_provider_is_not_swallowed(monkeypatch):
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
+def test_a_provider_that_is_not_enabled_is_not_swallowed():
     with pytest.raises(NotImplementedError):
-        extract_invoice(RO, AnthropicProvider())
+        extract_invoice(RO, StubProvider(NotImplementedError("provider not enabled")))
 
 
 @pytest.mark.parametrize("response", [[1], "text", None, 5])

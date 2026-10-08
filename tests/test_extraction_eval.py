@@ -21,7 +21,7 @@ import extraction_scoring as sc  # noqa: E402
 from ap_invoice_processor.llm.coercion import parse_amount  # noqa: E402
 from ap_invoice_processor.llm.extraction import ExtractedInvoice, ExtractedLineItem  # noqa: E402
 from ap_invoice_processor.llm.gl import GLCode, load_chart  # noqa: E402
-from ap_invoice_processor.llm.provider import AnthropicProvider, FixtureProvider  # noqa: E402
+from ap_invoice_processor.llm.provider import FixtureProvider  # noqa: E402
 from ap_invoice_processor.reader import ReaderOutput  # noqa: E402
 
 FIXTURE_LLM = os.path.join(ROOT, "tests", "fixtures", "llm")
@@ -405,9 +405,17 @@ def test_reports_start_with_the_banner(real, tmp_path):
     assert json.loads(raw)["banner"] == ee.BANNER
 
 
-def test_a_provider_without_an_approved_banner_is_refused(capsys):
+def test_a_provider_without_an_approved_banner_is_refused(capsys, monkeypatch, tmp_path):
+    class UnapprovedProvider:
+        def complete(self, task, prompt, doc_id):
+            raise AssertionError("must not be called")
+
+    # Isolate from the machine's real key file: the live provider must be unconfigured here.
+    monkeypatch.setenv("AP_INTAKE_ENV_FILE", str(tmp_path / "absent.env"))
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("AP_LLM_SPEND_CAP_USD", raising=False)
     with pytest.raises(NotImplementedError):
-        ee.banner_for(AnthropicProvider())
+        ee.banner_for(UnapprovedProvider())
     assert ee.main(["--provider", "anthropic"]) == 2
     captured = capsys.readouterr()
     assert "not run" in captured.err and ee.BANNER not in captured.out

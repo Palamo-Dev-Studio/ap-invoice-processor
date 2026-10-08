@@ -1,5 +1,5 @@
-# ABOUTME: LLMProvider protocol with a fixture-backed implementation and a live-provider stub.
-# ABOUTME: Provider choice comes from AP_LLM_PROVIDER (fixture|anthropic, default fixture); no network is ever used here.
+# ABOUTME: LLMProvider protocol, the fixture-backed implementation, and provider selection (fixture or anthropic).
+# ABOUTME: Provider choice comes from AP_LLM_PROVIDER (default fixture); the live provider is imported only when chosen.
 import json
 import os
 import re
@@ -16,7 +16,11 @@ _SAFE_SEGMENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 
 class LLMProviderError(RuntimeError):
-    """Raised when a provider cannot return a response (for the fixture provider: no fixture, or an unreadable one)."""
+    """Raised when a provider cannot return a response (fixture: no fixture or an unreadable one; live: any failed call)."""
+
+
+class ProviderConfigError(ValueError):
+    """Raised when a provider cannot be built from its configuration (missing key or cap, unreadable settings)."""
 
 
 @runtime_checkable
@@ -50,21 +54,28 @@ class FixtureProvider:
         return {k: v for k, v in data.items() if not k.startswith("_")}
 
 
-class AnthropicProvider:
-    """Placeholder for the live provider. Makes no network call and imports no SDK; it always raises."""
+def __getattr__(name: str) -> Any:
+    # AnthropicProvider is re-exported lazily so importing this module never loads the Anthropic SDK.
+    if name == "AnthropicProvider":
+        from ap_invoice_processor.llm.anthropic_provider import AnthropicProvider
 
-    def complete(self, task: str, prompt: str, doc_id: str) -> Dict[str, Any]:
-        raise NotImplementedError(
-            "Live LLM calls are not enabled: they await a decision on provider, API key and spend cap. "
-            f"Set {PROVIDER_ENV}=fixture to use the hand-authored fixtures."
-        )
+        return AnthropicProvider
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
-def get_provider(name: Optional[str] = None, fixtures_dir: Optional[str] = None) -> LLMProvider:
-    """Build the provider named by `name`, else by AP_LLM_PROVIDER, else the fixture provider."""
+def get_provider(
+    name: Optional[str] = None, fixtures_dir: Optional[str] = None, max_usd: Optional[float] = None
+) -> LLMProvider:
+    """Build the provider named by `name`, else by AP_LLM_PROVIDER, else the fixture provider.
+
+    `max_usd` is a cap on one run's spend and applies to the live provider only. Building the live provider raises
+    ProviderConfigError (a ValueError) when its key or spend cap is missing.
+    """
     chosen = (name or os.environ.get(PROVIDER_ENV) or DEFAULT_PROVIDER).strip().lower()
     if chosen == "fixture":
         return FixtureProvider(fixtures_dir or os.environ.get(FIXTURES_DIR_ENV) or DEFAULT_FIXTURES_DIR)
     if chosen == "anthropic":
-        return AnthropicProvider()
+        from ap_invoice_processor.llm.anthropic_provider import build_anthropic_provider
+
+        return build_anthropic_provider(max_usd=max_usd)
     raise ValueError(f"unknown LLM provider {chosen!r}; expected 'fixture' or 'anthropic'")
