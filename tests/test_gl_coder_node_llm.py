@@ -7,6 +7,7 @@ import shutil
 import pytest
 
 from ap_invoice_processor import document_intake
+from ap_invoice_processor import nodes as nodes_module
 from ap_invoice_processor.models import InvoiceState, LineItem
 from ap_invoice_processor.nodes import extractor_node, gl_coder_node, intake_node
 from ap_invoice_processor.reader import ReaderOutput
@@ -184,8 +185,16 @@ def test_simulated_extraction_path_keeps_the_keyword_coder_and_its_trail_shape()
     assert step["confidence"] == 0.95
 
 
-def test_simulated_extraction_path_never_consults_the_provider(monkeypatch):
-    # With the live stub selected, a provider call would raise; the simulated path must not make one.
+def test_simulated_extraction_path_never_consults_the_provider(monkeypatch, tmp_path):
+    # The live provider is selected, but the simulated path must not build or call one. The environment is cleared so
+    # that, were that to regress, the build would fail on configuration rather than reach a paid API; the spy below
+    # is what makes the test fail instead of passing quietly.
     monkeypatch.setenv("AP_LLM_PROVIDER", "anthropic")
+    monkeypatch.setenv("AP_INTAKE_ENV_FILE", str(tmp_path / "absent.env"))
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("AP_LLM_SPEND_CAP_USD", raising=False)
+    builds = []
+    monkeypatch.setattr(nodes_module, "get_provider", lambda *a, **k: builds.append((a, k)))
     state = _run_nodes(_simulated_payload())
+    assert builds == []
     assert state["extracted_fields"]["line_items"][0]["gl_account"] == "6000"
