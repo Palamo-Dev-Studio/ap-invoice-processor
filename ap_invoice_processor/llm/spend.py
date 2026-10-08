@@ -1,10 +1,12 @@
 # ABOUTME: Spend counter for live LLM calls: prices each response from its usage and keeps a persistent running total.
-# ABOUTME: Refuses a call before it is sent when the total plus a conservative estimate would pass the cap or the run cap.
+# ABOUTME: Admits a call only by reserving its conservative estimate under the ledger lock; settling replaces it with the real cost.
 import fcntl
 import json
 import math
 import os
 import tempfile
+import threading
+import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -17,7 +19,9 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 # eval/out/ is gitignored, so the ledger (a running record of real spend) is never committed.
 DEFAULT_LEDGER_PATH = os.path.join(_ROOT, "eval", "out", "spend.json")
 _MTOK = Decimal(1_000_000)
-LEDGER_VERSION = 1
+# Version 2 adds the `reservations` map. A version 1 file (settled spend only) reads as a version 2 file with none.
+LEDGER_VERSION = 2
+SUPPORTED_LEDGER_VERSIONS = frozenset({1, 2})
 # The pre-call estimate assumes one input token per this many UTF-8 bytes. Real text runs near 3 to 4 bytes per
 # token (Latin) and 1.5 to 3 (CJK), so 2 over-counts and the check errs toward refusing.
 ESTIMATE_BYTES_PER_TOKEN = 2
@@ -106,6 +110,8 @@ def cost_usd(model: str, usage: Any) -> Decimal:
     included, is then billed at that tier's rates.
     """
     pricing = _pricing(model)
+    if usage is None:
+        raise SpendLedgerError("the response carried no usage figures, so its cost is unknown")
     fresh = _tokens(usage, "input_tokens")
     out = _tokens(usage, "output_tokens")
     cache_read = _tokens(usage, "cache_read_input_tokens")
@@ -148,30 +154,55 @@ def estimate_cost_usd(model: str, prompt_text: str, max_output_tokens: int, extr
     return (Decimal(input_tokens) * rates.input + Decimal(max_output_tokens) * rates.output) / _MTOK
 
 
+@dataclass(frozen=True)
+class Reservation:
+    """A sum set aside in the ledger for one call before it is sent. `settle` replaces it with the observed cost."""
+
+    id: str
+    amount_usd: Decimal
+
+
 class SpendTracker:
     """A persistent running total of spend, with a cap on that total and an optional cap on this run's spend.
 
-    The total lives in a JSON ledger so it survives between runs; each instance also counts what it recorded itself
-    (`run_spent_usd`). `check` is the pre-call gate and `record` books the real cost afterwards. Reads and writes
-    take an exclusive file lock and replace the ledger atomically. The gap between `check` and `record` is not
-    locked, so concurrent processes can overshoot by up to one call each; Anthropic's own workspace cap is the
-    backstop for that and for any call whose cost is never observed (a timeout after the request was accepted).
+    Admission is reserve then settle. `reserve(estimate)` runs under the ledger's exclusive file lock: it admits the
+    call only if the ledger's counted spend (settled costs plus every reservation not yet settled, by any process)
+    plus the estimate stays within the cap, and this run's counted spend plus the estimate stays within the run cap;
+    it then writes the reservation into the ledger before the caller sends anything. `settle` replaces a reservation
+    with the observed cost. A reservation that is never settled (a timeout, a dropped connection, a crash) stays in
+    the ledger as spent, because the request may have been billed whether or not its cost was seen. Nothing here
+    releases a reservation.
+
+    The ledger is a JSON file that survives between runs. `total_usd` in it is the counted spend: settled costs plus
+    the reservations listed under `reservations`. A version 1 file (no reservations) is read as settled spend only.
+    Each instance also counts its own spend (`run_spent_usd`: what it settled plus what it still holds reserved).
+    Reads and writes replace the ledger atomically, and every I/O failure surfaces as SpendLedgerError.
     """
 
     def __init__(self, path: str, cap_usd: Decimal, run_cap_usd: Optional[Decimal] = None):
         self.path = path
         self.cap_usd = cap_usd
         self.run_cap_usd = run_cap_usd
-        self.run_spent_usd = Decimal(0)
         self.run_calls = 0
+        self._memory = threading.Lock()
+        self._run_settled_usd = Decimal(0)
+        self._run_held: Dict[str, Decimal] = {}
 
     # -- ledger file ------------------------------------------------------------------------------------------------
 
     @contextmanager
     def _locked(self) -> Iterator[None]:
-        os.makedirs(os.path.dirname(os.path.abspath(self.path)), exist_ok=True)
-        with open(self.path + ".lock", "a") as lock:
-            fcntl.flock(lock, fcntl.LOCK_EX)
+        """Hold the ledger's exclusive lock; a failure to take it is a SpendLedgerError, not a raw OSError."""
+        try:
+            os.makedirs(os.path.dirname(os.path.abspath(self.path)), exist_ok=True)
+            lock = open(self.path + ".lock", "a")
+        except OSError as exc:
+            raise SpendLedgerError(f"cannot open the lock for spend ledger {self.path}: {exc}") from exc
+        with lock:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX)
+            except OSError as exc:
+                raise SpendLedgerError(f"cannot lock spend ledger {self.path}: {exc}") from exc
             try:
                 yield
             finally:
@@ -183,65 +214,147 @@ class SpendTracker:
             with open(self.path, encoding="utf-8") as f:
                 data = json.load(f)
         except FileNotFoundError:
-            return {"total_usd": "0", "calls": 0}
+            return {"total_usd": Decimal(0), "calls": 0, "reservations": {}}
         except (OSError, ValueError) as exc:
             raise SpendLedgerError(f"spend ledger {self.path} is unreadable ({exc}); not resetting it to zero") from exc
         try:
+            version = data.get("version", 1)
+            if isinstance(version, bool) or version not in SUPPORTED_LEDGER_VERSIONS:
+                raise SpendLedgerError(
+                    f"spend ledger {self.path} is version {version!r}; this code reads versions "
+                    f"{sorted(SUPPORTED_LEDGER_VERSIONS)} only, and will not guess at the rest"
+                )
             total = Decimal(data["total_usd"])
             calls = data.get("calls", 0)
             if not total.is_finite() or total < 0 or isinstance(calls, bool) or not isinstance(calls, int) or calls < 0:
                 raise ValueError("out-of-range value")
+            reservations: Dict[str, Dict[str, Any]] = {}
+            raw_reservations = data.get("reservations", {})
+            if not isinstance(raw_reservations, dict):
+                raise ValueError("reservations is not a mapping")
+            for key, entry in raw_reservations.items():
+                amount = Decimal(entry["usd"])
+                if not amount.is_finite() or amount < 0:
+                    raise ValueError("out-of-range reservation")
+                reservations[str(key)] = {"usd": amount, "at": str(entry.get("at", ""))}
+            if sum((r["usd"] for r in reservations.values()), Decimal(0)) > total:
+                raise ValueError("reservations exceed the total")
+        except SpendLedgerError:
+            raise
         except (TypeError, KeyError, ValueError, InvalidOperation, AttributeError) as exc:
-            raise SpendLedgerError(f"spend ledger {self.path} holds no valid total_usd/calls; not resetting it") from exc
-        return {"total_usd": total, "calls": calls}
+            raise SpendLedgerError(f"spend ledger {self.path} holds no valid total_usd/calls/reservations; not resetting it") from exc
+        return {"total_usd": total, "calls": calls, "reservations": reservations}
 
-    def _write(self, total: Decimal, calls: int) -> None:
+    def _write(self, ledger: Dict[str, Any]) -> None:
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         payload = {
             "version": LEDGER_VERSION,
-            "total_usd": format(total, "f"),
-            "calls": calls,
-            "updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "total_usd": format(ledger["total_usd"], "f"),
+            "calls": ledger["calls"],
+            "reservations": {key: {"usd": format(r["usd"], "f"), "at": r["at"]} for key, r in ledger["reservations"].items()},
+            "updated_at": now,
         }
         directory = os.path.dirname(os.path.abspath(self.path))
-        fd, tmp = tempfile.mkstemp(dir=directory, prefix=".spend-", suffix=".tmp")
+        tmp = None
         try:
+            fd, tmp = tempfile.mkstemp(dir=directory, prefix=".spend-", suffix=".tmp")
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 json.dump(payload, f, indent=1)
                 f.write("\n")
             os.replace(tmp, self.path)
-        except BaseException:
-            if os.path.exists(tmp):
+        except OSError as exc:
+            raise SpendLedgerError(f"could not write spend ledger {self.path}: {exc}") from exc
+        finally:
+            if tmp is not None and os.path.exists(tmp):
                 os.unlink(tmp)
-            raise
 
     # -- public -----------------------------------------------------------------------------------------------------
 
     @property
     def total_usd(self) -> Decimal:
+        """Counted spend: settled costs plus reservations not yet settled."""
         with self._locked():
-            return Decimal(self._read()["total_usd"])
+            return self._read()["total_usd"]
 
-    def check(self, estimate_usd: Decimal) -> None:
-        """Raise SpendCapExceeded unless a call costing up to `estimate_usd` still fits under both caps."""
-        total = self.total_usd
-        if total + estimate_usd > self.cap_usd:
-            raise SpendCapExceeded(
-                f"spend cap ${self.cap_usd} would be exceeded: ${total} spent so far + up to ${estimate_usd:.6f} for this call"
+    @property
+    def reserved_usd(self) -> Decimal:
+        """The part of `total_usd` still held as reservations (in-flight calls and calls whose outcome is unknown)."""
+        with self._locked():
+            return sum((r["usd"] for r in self._read()["reservations"].values()), Decimal(0))
+
+    @property
+    def run_spent_usd(self) -> Decimal:
+        """What this instance has settled plus what it still holds reserved."""
+        with self._memory:
+            return self._run_settled_usd + sum(self._run_held.values(), Decimal(0))
+
+    def reserve(self, estimate_usd: Decimal) -> Reservation:
+        """Admit one call costing up to `estimate_usd`, or raise SpendCapExceeded without writing anything.
+
+        The check and the write happen under one hold of the ledger lock, so concurrent callers (threads or
+        processes) can never admit more than the cap between them.
+        """
+        if estimate_usd < 0:
+            raise SpendLedgerError(f"refusing to reserve a negative estimate: {estimate_usd}")
+        with self._locked():
+            ledger = self._read()
+            total = ledger["total_usd"]
+            if total + estimate_usd > self.cap_usd:
+                raise SpendCapExceeded(
+                    f"spend cap ${self.cap_usd} would be exceeded: ${total} spent or reserved so far + "
+                    f"up to ${estimate_usd:.6f} for this call"
+                )
+            run_spent = self.run_spent_usd
+            if self.run_cap_usd is not None and run_spent + estimate_usd > self.run_cap_usd:
+                raise SpendCapExceeded(
+                    f"run cap ${self.run_cap_usd} would be exceeded: ${run_spent} spent or reserved this run + "
+                    f"up to ${estimate_usd:.6f} for this call"
+                )
+            reservation = Reservation(uuid.uuid4().hex, estimate_usd)
+            ledger["total_usd"] = total + estimate_usd
+            ledger["reservations"][reservation.id] = {
+                "usd": estimate_usd,
+                "at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            }
+            self._write(ledger)
+            with self._memory:
+                self._run_held[reservation.id] = estimate_usd
+        return reservation
+
+    def settle(self, reservation: Reservation, actual_usd: Decimal) -> Decimal:
+        """Replace `reservation` with the observed cost `actual_usd` and return the ledger's new counted total.
+
+        The observed cost is written in full even when it exceeds the reservation. If the ledger no longer lists the
+        reservation (it was edited or restored from a backup) the cost is still booked, and SpendLedgerError says so.
+        """
+        if actual_usd < 0:
+            raise SpendLedgerError(f"refusing to record a negative cost: {actual_usd}")
+        with self._locked():
+            ledger = self._read()
+            held = ledger["reservations"].pop(reservation.id, None)
+            ledger["total_usd"] += actual_usd - (held["usd"] if held else Decimal(0))
+            ledger["calls"] += 1
+            self._write(ledger)
+            with self._memory:
+                self._run_held.pop(reservation.id, None)
+                self._run_settled_usd += actual_usd
+                self.run_calls += 1
+        if held is None:
+            raise SpendLedgerError(
+                f"reservation {reservation.id} is not in spend ledger {self.path}; the observed cost ${actual_usd} was booked anyway"
             )
-        if self.run_cap_usd is not None and self.run_spent_usd + estimate_usd > self.run_cap_usd:
-            raise SpendCapExceeded(
-                f"run cap ${self.run_cap_usd} would be exceeded: ${self.run_spent_usd} spent this run + "
-                f"up to ${estimate_usd:.6f} for this call"
-            )
+        return ledger["total_usd"]
 
     def record(self, cost_usd_: Decimal) -> Decimal:
-        """Add a real, observed cost to the ledger and return the new total."""
+        """Book an observed cost that had no reservation and return the new counted total. It admits nothing."""
         if cost_usd_ < 0:
             raise SpendLedgerError(f"refusing to record a negative cost: {cost_usd_}")
         with self._locked():
-            current = self._read()
-            total = Decimal(current["total_usd"]) + cost_usd_
-            self._write(total, current["calls"] + 1)
-        self.run_spent_usd += cost_usd_
-        self.run_calls += 1
-        return total
+            ledger = self._read()
+            ledger["total_usd"] += cost_usd_
+            ledger["calls"] += 1
+            self._write(ledger)
+            with self._memory:
+                self._run_settled_usd += cost_usd_
+                self.run_calls += 1
+        return ledger["total_usd"]

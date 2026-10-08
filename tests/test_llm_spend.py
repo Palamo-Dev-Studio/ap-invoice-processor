@@ -1,7 +1,10 @@
-# ABOUTME: Tests for the live-LLM spend counter: pricing arithmetic, the pre-call cap check and ledger persistence.
-# ABOUTME: Pure arithmetic and temp-file tests; no network and no SDK client is created.
+# ABOUTME: Tests for the live-LLM spend counter: pricing arithmetic, reserve-then-settle admission and ledger persistence.
+# ABOUTME: Arithmetic, temp-file, thread and subprocess tests; no network and no SDK client is created.
 import json
 import os
+import subprocess
+import sys
+import threading
 from decimal import Decimal
 from types import SimpleNamespace
 
@@ -123,6 +126,11 @@ def test_malformed_token_counts_are_refused(bad):
         cost_usd(MODEL, usage(inp=bad))
 
 
+def test_a_response_with_no_usage_is_refused_not_priced_at_zero():
+    with pytest.raises(SpendLedgerError, match="no usage"):
+        cost_usd(MODEL, None)
+
+
 # --- the pre-call estimate -------------------------------------------------------------------------------------------
 
 
@@ -152,16 +160,21 @@ def test_the_estimate_covers_the_extra_text_the_request_adds_to_the_prompt():
     assert with_extra > base
 
 
-# --- the tracker: ledger, cap and run cap ------------------------------------------------------------------------------
+# --- the tracker: ledger, reservations, cap and run cap ----------------------------------------------------------------------
 
 
 def make(tmp_path, cap="10", run_cap=None, name="spend.json"):
     return SpendTracker(str(tmp_path / name), cap_usd=D(cap), run_cap_usd=None if run_cap is None else D(run_cap))
 
 
+def ledger_file(tracker):
+    with open(tracker.path, encoding="utf-8") as f:
+        return json.load(f)
+
+
 def test_a_new_ledger_starts_at_zero_and_creates_no_file_until_something_is_recorded(tmp_path):
     t = make(tmp_path)
-    assert t.total_usd == 0 and t.run_spent_usd == 0
+    assert t.total_usd == 0 and t.run_spent_usd == 0 and t.reserved_usd == 0
     assert not os.path.exists(t.path)
 
 
@@ -169,8 +182,7 @@ def test_recording_adds_to_the_total_and_writes_the_ledger(tmp_path):
     t = make(tmp_path)
     assert t.record(D("0.25")) == D("0.25")
     assert t.record(D("0.5")) == D("0.75")
-    with open(t.path, encoding="utf-8") as f:
-        data = json.load(f)
+    data = ledger_file(t)
     assert D(data["total_usd"]) == D("0.75")
     assert data["calls"] == 2
     assert t.total_usd == D("0.75") and t.run_spent_usd == D("0.75")
@@ -194,8 +206,7 @@ def test_the_tracker_counts_this_runs_calls_separately_from_the_ledgers(tmp_path
     second = make(tmp_path)
     second.record(D("0.1"))
     assert (first.run_calls, second.run_calls) == (2, 1)
-    with open(second.path, encoding="utf-8") as f:
-        assert json.load(f)["calls"] == 3
+    assert ledger_file(second)["calls"] == 3
 
 
 def test_many_small_records_do_not_drift(tmp_path):
@@ -205,74 +216,178 @@ def test_many_small_records_do_not_drift(tmp_path):
     assert make(tmp_path).total_usd == D("0.035")
 
 
-def test_a_call_that_stays_under_the_cap_is_allowed_and_the_cap_itself_is_reachable(tmp_path):
-    t = make(tmp_path, cap="10")
-    t.record(D("9.5"))
-    t.check(D("0.4"))
-    t.check(D("0.5"))  # total + estimate == cap does not exceed it
-
-
-def test_a_call_that_would_pass_the_cap_is_refused_before_anything_is_recorded(tmp_path):
-    t = make(tmp_path, cap="10")
-    t.record(D("9.5"))
-    with pytest.raises(SpendCapExceeded, match="cap"):
-        t.check(D("0.5001"))
-    assert t.total_usd == D("9.5")
-
-
 def test_the_cap_error_is_a_provider_error_so_the_pipeline_routes_it_to_human_review():
     assert issubclass(SpendCapExceeded, LLMProviderError)
     assert issubclass(SpendLedgerError, LLMProviderError)
 
 
-def test_once_the_cap_is_reached_even_a_zero_cost_estimate_over_the_cap_is_refused(tmp_path):
+# reserve
+
+
+def test_a_reservation_is_written_to_the_ledger_before_reserve_returns(tmp_path):
+    t = make(tmp_path)
+    r = t.reserve(D("0.4"))
+    assert r.amount_usd == D("0.4")
+    data = ledger_file(t)
+    assert D(data["total_usd"]) == D("0.4")
+    assert D(data["reservations"][r.id]["usd"]) == D("0.4")
+    assert t.reserved_usd == D("0.4") and t.run_spent_usd == D("0.4")
+
+
+def test_a_call_that_stays_under_the_cap_is_admitted_and_the_cap_itself_is_reachable(tmp_path):
+    t = make(tmp_path, cap="10")
+    t.record(D("9.5"))
+    t.reserve(D("0.5"))  # total + estimate == cap does not exceed it
+    assert t.total_usd == D("10.0")
+
+
+def test_a_call_that_would_pass_the_cap_is_refused_and_nothing_is_written(tmp_path):
+    t = make(tmp_path, cap="10")
+    t.record(D("9.5"))
+    before = ledger_file(t)
+    with pytest.raises(SpendCapExceeded, match="spend cap"):
+        t.reserve(D("0.5001"))
+    assert ledger_file(t) == before
+    assert t.run_spent_usd == D("9.5")
+
+
+def test_once_the_cap_is_reached_even_a_zero_estimate_over_the_cap_is_refused(tmp_path):
     t = make(tmp_path, cap="1")
     t.record(D("1.2"))
     with pytest.raises(SpendCapExceeded):
-        t.check(D("0"))
+        t.reserve(D("0"))
 
 
 def test_the_total_from_earlier_runs_counts_against_the_cap(tmp_path):
     make(tmp_path, cap="10").record(D("9.9"))
-    t = make(tmp_path, cap="10")
     with pytest.raises(SpendCapExceeded):
-        t.check(D("0.2"))
+        make(tmp_path, cap="10").reserve(D("0.2"))
+
+
+def test_a_pending_reservation_counts_against_the_cap_for_the_next_caller(tmp_path):
+    first = make(tmp_path, cap="10")
+    first.reserve(D("6"))
+    with pytest.raises(SpendCapExceeded, match="spend cap"):
+        make(tmp_path, cap="10").reserve(D("4.0001"))  # another process: it sees the pending 6
+    make(tmp_path, cap="10").reserve(D("4"))
+
+
+def test_a_pending_reservation_counts_against_the_cap_for_the_same_tracker(tmp_path):
+    t = make(tmp_path, cap="10")
+    t.reserve(D("6"))
+    with pytest.raises(SpendCapExceeded):
+        t.reserve(D("4.0001"))
+
+
+def test_the_global_cap_applies_to_settled_and_reserved_spend_together(tmp_path):
+    t = make(tmp_path, cap="10")
+    t.record(D("5"))
+    t.reserve(D("4"))
+    with pytest.raises(SpendCapExceeded):
+        t.reserve(D("1.0001"))
+    t.reserve(D("1"))
+
+
+def test_a_negative_estimate_is_refused(tmp_path):
+    with pytest.raises(SpendLedgerError, match="negative"):
+        make(tmp_path).reserve(D("-1"))
 
 
 def test_the_run_cap_limits_this_runs_spend_even_when_the_global_cap_is_far_away(tmp_path):
     make(tmp_path, cap="10").record(D("3"))
     t = make(tmp_path, cap="10", run_cap="0.5")
-    t.check(D("0.5"))
-    t.record(D("0.3"))
-    t.check(D("0.2"))
+    r = t.reserve(D("0.5"))
+    t.settle(r, D("0.3"))
+    t.reserve(D("0.2"))
     with pytest.raises(SpendCapExceeded, match="run cap"):
-        t.check(D("0.2001"))
+        t.reserve(D("0.0001"))
+
+
+def test_the_run_cap_counts_this_runs_pending_reservations(tmp_path):
+    t = make(tmp_path, cap="10", run_cap="1")
+    t.reserve(D("0.7"))
+    with pytest.raises(SpendCapExceeded, match="run cap"):
+        t.reserve(D("0.3001"))
+
+
+def test_the_run_cap_does_not_count_other_runs_pending_reservations(tmp_path):
+    make(tmp_path, cap="10").reserve(D("4"))
+    t = make(tmp_path, cap="10", run_cap="1")
+    t.reserve(D("1"))  # the other run's 4 counts against the global cap only
 
 
 def test_the_global_cap_still_applies_when_the_run_cap_is_not_reached(tmp_path):
     make(tmp_path, cap="10").record(D("9.9"))
     t = make(tmp_path, cap="10", run_cap="5")
     with pytest.raises(SpendCapExceeded, match="spend cap"):
-        t.check(D("0.2"))
+        t.reserve(D("0.2"))
 
 
-def test_a_corrupt_ledger_refuses_calls_instead_of_restarting_from_zero(tmp_path):
-    path = tmp_path / "spend.json"
-    path.write_text("{not json", encoding="utf-8")
-    t = SpendTracker(str(path), cap_usd=D("10"))
-    with pytest.raises(SpendLedgerError, match="unreadable"):
-        t.check(D("0"))
-    with pytest.raises(SpendLedgerError):
-        t.record(D("0.1"))
-    assert path.read_text(encoding="utf-8") == "{not json"
+# settle
 
 
-@pytest.mark.parametrize("content", ['{"total_usd": "-1"}', '{"total_usd": "abc"}', "[]", '{"calls": 1}', '{"total_usd": "NaN"}'])
-def test_a_ledger_with_a_bad_total_is_refused(tmp_path, content):
-    path = tmp_path / "spend.json"
-    path.write_text(content, encoding="utf-8")
-    with pytest.raises(SpendLedgerError):
-        SpendTracker(str(path), cap_usd=D("10")).check(D("0"))
+def test_settling_replaces_the_reservation_with_the_observed_cost(tmp_path):
+    t = make(tmp_path)
+    r = t.reserve(D("0.4"))
+    assert t.settle(r, D("0.05")) == D("0.05")
+    data = ledger_file(t)
+    assert D(data["total_usd"]) == D("0.05") and data["reservations"] == {} and data["calls"] == 1
+    assert t.reserved_usd == 0
+    assert t.run_spent_usd == D("0.05") and t.run_calls == 1
+
+
+def test_settling_frees_the_unused_part_of_the_reservation(tmp_path):
+    t = make(tmp_path, cap="1")
+    r = t.reserve(D("0.9"))
+    with pytest.raises(SpendCapExceeded):
+        t.reserve(D("0.2"))
+    t.settle(r, D("0.1"))
+    t.reserve(D("0.9"))
+
+
+def test_the_observed_cost_is_booked_in_full_even_when_it_passes_the_reservation(tmp_path):
+    t = make(tmp_path, cap="1")
+    r = t.reserve(D("0.1"))
+    assert t.settle(r, D("0.3")) == D("0.3")
+    assert t.total_usd == D("0.3")
+
+
+def test_a_reservation_that_is_never_settled_stays_counted_as_spent(tmp_path):
+    t = make(tmp_path, cap="10")
+    t.reserve(D("4"))  # the process "crashes" here: nothing settles it
+    later = make(tmp_path, cap="10")
+    assert later.total_usd == D("4") and later.reserved_usd == D("4")
+    with pytest.raises(SpendCapExceeded):
+        later.reserve(D("6.0001"))
+
+
+def test_settling_one_reservation_leaves_the_others_in_place(tmp_path):
+    t = make(tmp_path)
+    a, b = t.reserve(D("1")), t.reserve(D("2"))
+    t.settle(a, D("0.5"))
+    data = ledger_file(t)
+    assert list(data["reservations"]) == [b.id] and D(data["total_usd"]) == D("2.5")
+
+
+def test_settling_a_reservation_the_ledger_no_longer_lists_books_the_cost_and_says_so(tmp_path):
+    t = make(tmp_path)
+    r = t.reserve(D("1"))
+    data = ledger_file(t)
+    data["reservations"] = {}
+    data["total_usd"] = "0"
+    with open(t.path, "w", encoding="utf-8") as f:
+        json.dump(data, f)
+    with pytest.raises(SpendLedgerError, match="not in spend ledger"):
+        t.settle(r, D("0.2"))
+    assert t.total_usd == D("0.2")
+
+
+def test_settle_rejects_a_negative_cost(tmp_path):
+    t = make(tmp_path)
+    r = t.reserve(D("1"))
+    with pytest.raises(SpendLedgerError, match="negative"):
+        t.settle(r, D("-0.01"))
+    assert t.reserved_usd == D("1")
 
 
 def test_record_rejects_a_negative_cost(tmp_path):
@@ -280,10 +395,210 @@ def test_record_rejects_a_negative_cost(tmp_path):
         make(tmp_path).record(D("-0.01"))
 
 
+# the file: corruption, migration, I/O failure
+
+
+def test_a_corrupt_ledger_refuses_calls_instead_of_restarting_from_zero(tmp_path):
+    path = tmp_path / "spend.json"
+    path.write_text("{not json", encoding="utf-8")
+    t = SpendTracker(str(path), cap_usd=D("10"))
+    with pytest.raises(SpendLedgerError, match="unreadable"):
+        t.reserve(D("0"))
+    with pytest.raises(SpendLedgerError):
+        t.record(D("0.1"))
+    with pytest.raises(SpendLedgerError):
+        t.settle(spend.Reservation("x", D("1")), D("0.1"))
+    assert path.read_text(encoding="utf-8") == "{not json"
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        '{"total_usd": "-1"}', '{"total_usd": "abc"}', "[]", '{"calls": 1}', '{"total_usd": "NaN"}',
+        '{"version": 3, "total_usd": "1"}', '{"version": "2", "total_usd": "1"}', '{"version": true, "total_usd": "1"}',
+        '{"version": 2, "total_usd": "1", "reservations": []}',
+        '{"version": 2, "total_usd": "1", "reservations": {"a": {"usd": "2"}}}',
+        '{"version": 2, "total_usd": "5", "reservations": {"a": {"usd": "-1"}}}',
+        '{"version": 2, "total_usd": "5", "reservations": {"a": {"usd": "abc"}}}',
+        '{"version": 2, "total_usd": "5", "reservations": {"a": "1"}}',
+    ],
+)
+def test_a_ledger_that_cannot_be_trusted_is_refused(tmp_path, content):
+    path = tmp_path / "spend.json"
+    path.write_text(content, encoding="utf-8")
+    with pytest.raises(SpendLedgerError):
+        SpendTracker(str(path), cap_usd=D("10")).reserve(D("0"))
+    assert path.read_text(encoding="utf-8") == content
+
+
+def test_a_version_1_ledger_keeps_its_total_and_is_rewritten_as_version_2(tmp_path):
+    path = tmp_path / "spend.json"
+    path.write_text(json.dumps({"version": 1, "total_usd": "3.25", "calls": 7, "updated_at": "2026-10-07T00:00:00Z"}), encoding="utf-8")
+    t = SpendTracker(str(path), cap_usd=D("10"))
+    assert t.total_usd == D("3.25") and t.reserved_usd == 0
+    r = t.reserve(D("1"))
+    t.settle(r, D("0.5"))
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert data["version"] == spend.LEDGER_VERSION == 2
+    assert D(data["total_usd"]) == D("3.75") and data["calls"] == 8 and data["reservations"] == {}
+
+
+def test_a_version_1_total_counts_against_the_cap(tmp_path):
+    path = tmp_path / "spend.json"
+    path.write_text(json.dumps({"version": 1, "total_usd": "9.9", "calls": 1}), encoding="utf-8")
+    with pytest.raises(SpendCapExceeded):
+        SpendTracker(str(path), cap_usd=D("10")).reserve(D("0.2"))
+
+
 def test_the_ledger_directory_is_created_on_first_write(tmp_path):
     t = SpendTracker(str(tmp_path / "deep" / "dir" / "spend.json"), cap_usd=D("10"))
     t.record(D("0.01"))
     assert os.path.isfile(t.path)
+
+
+def _boom(*args, **kwargs):
+    raise OSError(28, "No space left on device")
+
+
+@pytest.mark.parametrize("action", ["reserve", "settle", "record", "total_usd"])
+@pytest.mark.parametrize("failure", ["replace", "mkstemp", "flock"])
+def test_an_io_failure_is_a_spend_ledger_error_not_a_raw_oserror(tmp_path, monkeypatch, action, failure):
+    t = make(tmp_path)
+    r = t.reserve(D("1"))  # a good ledger on disk first
+    target = {"replace": (spend.os, "replace"), "mkstemp": (spend.tempfile, "mkstemp"), "flock": (spend.fcntl, "flock")}[failure]
+    monkeypatch.setattr(*target, _boom)
+    calls = {
+        "reserve": lambda: t.reserve(D("1")),
+        "settle": lambda: t.settle(r, D("0.1")),
+        "record": lambda: t.record(D("0.1")),
+        "total_usd": lambda: t.total_usd,
+    }
+    expected_to_write = action != "total_usd"
+    if not expected_to_write and failure != "flock":
+        calls[action]()  # reading needs no temp file and no replace
+        return
+    with pytest.raises(SpendLedgerError) as info:
+        calls[action]()
+    assert isinstance(info.value, LLMProviderError)
+
+
+def test_a_ledger_directory_that_cannot_be_created_is_a_spend_ledger_error(tmp_path):
+    (tmp_path / "file").write_text("x", encoding="utf-8")
+    t = SpendTracker(str(tmp_path / "file" / "spend.json"), cap_usd=D("10"))
+    with pytest.raises(SpendLedgerError, match="lock"):
+        t.reserve(D("1"))
+
+
+def test_a_failed_write_leaves_the_ledger_and_the_run_counters_untouched_and_no_temp_file(tmp_path, monkeypatch):
+    t = make(tmp_path)
+    r = t.reserve(D("1"))
+    before = (tmp_path / "spend.json").read_text(encoding="utf-8")
+    with monkeypatch.context() as patched:
+        patched.setattr(spend.os, "replace", _boom)
+        with pytest.raises(SpendLedgerError):
+            t.settle(r, D("0.1"))
+        with pytest.raises(SpendLedgerError):
+            t.reserve(D("1"))
+    assert (tmp_path / "spend.json").read_text(encoding="utf-8") == before
+    assert sorted(os.listdir(tmp_path)) == ["spend.json", "spend.json.lock"]
+    assert t.run_spent_usd == D("1") and t.run_calls == 0  # the failed settle still holds its reservation
+
+
+# concurrent admission: never more than the cap, however the callers interleave
+
+CAP, ESTIMATE = D("1.00"), D("0.03")
+FITS = 33  # floor(1.00 / 0.03)
+
+
+def _hammer(trackers, attempts):
+    """Each tracker's thread tries `attempts` reservations of ESTIMATE, all released together by a barrier."""
+    barrier = threading.Barrier(len(trackers))
+    admitted = []
+    errors = []
+
+    def work(tracker):
+        barrier.wait()
+        for _ in range(attempts):
+            try:
+                tracker.reserve(ESTIMATE)
+                admitted.append(1)
+            except SpendCapExceeded:
+                pass
+            except BaseException as exc:  # noqa: BLE001 - surfaced by the assertion below
+                errors.append(exc)
+
+    threads = [threading.Thread(target=work, args=(t,)) for t in trackers]
+    for th in threads:
+        th.start()
+    for th in threads:
+        th.join()
+    assert errors == []
+    return len(admitted)
+
+
+def test_threads_with_their_own_trackers_never_admit_more_than_the_cap_between_them(tmp_path):
+    trackers = [make(tmp_path, cap=str(CAP)) for _ in range(12)]
+    assert _hammer(trackers, attempts=10) == FITS
+    check = make(tmp_path, cap=str(CAP))
+    assert check.total_usd == ESTIMATE * FITS <= CAP
+    assert len(ledger_file(check)["reservations"]) == FITS
+
+
+def test_threads_sharing_one_tracker_never_pass_the_global_cap_or_the_run_cap(tmp_path):
+    shared = make(tmp_path, cap="50", run_cap=str(CAP))
+    assert _hammer([shared] * 12, attempts=10) == FITS
+    assert shared.run_spent_usd == ESTIMATE * FITS <= CAP
+    assert shared.total_usd == ESTIMATE * FITS
+
+
+def test_concurrent_settling_and_reserving_keeps_the_ledger_consistent(tmp_path):
+    t = make(tmp_path, cap="1000")
+    barrier = threading.Barrier(8)
+
+    def work():
+        barrier.wait()
+        for _ in range(20):
+            r = t.reserve(D("0.5"))
+            t.settle(r, D("0.25"))
+
+    threads = [threading.Thread(target=work) for _ in range(8)]
+    for th in threads:
+        th.start()
+    for th in threads:
+        th.join()
+    assert t.total_usd == D("0.25") * 160 and t.reserved_usd == 0
+    assert ledger_file(t)["calls"] == 160 and t.run_calls == 160
+
+
+_CHILD = """
+import sys
+from decimal import Decimal
+sys.path.insert(0, sys.argv[1])
+from ap_invoice_processor.llm.spend import SpendCapExceeded, SpendTracker
+tracker = SpendTracker(sys.argv[2], cap_usd=Decimal("1.00"))
+admitted = 0
+for _ in range(20):
+    try:
+        tracker.reserve(Decimal("0.03"))
+        admitted += 1
+    except SpendCapExceeded:
+        pass
+print(admitted)
+"""
+
+
+def test_separate_processes_never_admit_more_than_the_cap_between_them(tmp_path):
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    ledger = str(tmp_path / "spend.json")
+    env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+    procs = [
+        subprocess.Popen([sys.executable, "-I", "-c", _CHILD, root, ledger], stdout=subprocess.PIPE, text=True, env=env)
+        for _ in range(6)
+    ]
+    outputs = [p.communicate(timeout=120)[0] for p in procs]
+    assert [p.returncode for p in procs] == [0] * 6
+    assert sum(int(o) for o in outputs) == FITS
+    assert SpendTracker(ledger, cap_usd=CAP).total_usd == ESTIMATE * FITS <= CAP
 
 
 @pytest.mark.parametrize("bad", ["0", "-1", "abc", "NaN", "Infinity", ""])

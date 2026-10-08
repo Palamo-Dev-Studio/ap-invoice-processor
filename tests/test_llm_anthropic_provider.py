@@ -2,6 +2,8 @@
 # ABOUTME: The real SDK client runs against an httpx2 MockTransport, so no test here touches the network or a real key.
 import json
 import os
+import shutil
+import threading
 import time
 from decimal import Decimal
 
@@ -9,16 +11,21 @@ import anthropic
 import httpx2
 import pytest
 
+from ap_invoice_processor.document_intake import fill_state_from_document
 from ap_invoice_processor.llm import anthropic_provider as ap
+from ap_invoice_processor.llm import spend as spend_module
 from ap_invoice_processor.llm.anthropic_provider import AnthropicProvider, build_anthropic_provider
 from ap_invoice_processor.llm.extraction import ExtractionError, extract_invoice
 from ap_invoice_processor.llm.extraction import ExtractedInvoice
 from ap_invoice_processor.llm.gl import code_lines, load_chart
 from ap_invoice_processor.llm.provider import LLMProvider, LLMProviderError, ProviderConfigError, get_provider
-from ap_invoice_processor.llm.spend import SpendCapExceeded, SpendTracker
+from ap_invoice_processor.llm.spend import SpendCapExceeded, SpendLedgerError, SpendTracker
+from ap_invoice_processor.models import InvoiceState
 from ap_invoice_processor.reader import ReaderOutput
 
 D = Decimal
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+EN_001_PDF = os.path.join(ROOT, "data", "corpus", "pdf", "en-001.pdf")
 KEY = "sk-ant-TEST-KEY-do-not-leak-0123456789"
 INVOICE = {
     "vendor_name": "Acme Marketing Solutions",
@@ -84,6 +91,19 @@ def make_provider(tmp_path, transport, cap="10", run_cap=None, max_retries=2, **
     )
     tracker = SpendTracker(str(tmp_path / "spend.json"), cap_usd=D(cap), run_cap_usd=None if run_cap is None else D(run_cap))
     return AnthropicProvider(client, tracker, **kwargs)
+
+
+def estimate(prompt, max_tokens=ap.DEFAULT_MAX_TOKENS, task="extract"):
+    """What the provider estimates for one attempt of `prompt`; the same arithmetic complete() uses."""
+    return ap.estimate_cost_usd(
+        ap.DEFAULT_MODEL, prompt, max_tokens,
+        extra_input_chars=len(ap.SYSTEM_PROMPT) + len(json.dumps(ap.TASK_SCHEMAS[task])),
+    )
+
+
+def hold(tmp_path, prompt, max_retries=2, **kwargs):
+    """The sum reserved for one call: one estimate per possible attempt (the first plus every SDK retry)."""
+    return estimate(prompt, **kwargs) * (max_retries + 1)
 
 
 def ledger_total(tmp_path):
@@ -268,7 +288,9 @@ def test_client_errors_fail_at_once_without_retrying(tmp_path, status, kind):
     with pytest.raises(LLMProviderError, match=str(status)):
         make_provider(tmp_path, t, max_retries=3).complete("extract", "p", "doc-1")
     assert len(t.requests) == 1
-    assert not (tmp_path / "spend.json").exists()  # nothing was billed
+    # The provider does not assume a rejected request cost nothing: the reservation stays counted (see the
+    # unknown-outcome tests below), so a failure can only ever over-count spend.
+    assert ledger_total(tmp_path) == hold(tmp_path, "p", max_retries=3)
 
 
 def test_a_rate_limit_is_retried_and_then_succeeds(tmp_path):
@@ -334,8 +356,8 @@ def test_a_call_that_fits_under_the_cap_is_sent_and_leaves_the_flag_unset(tmp_pa
 
 def test_the_run_cap_stops_calls_while_the_global_cap_has_room(tmp_path):
     t = Transport(message(json.dumps(INVOICE)))
-    p = make_provider(tmp_path, t, cap="10", run_cap="0.005")
-    p.complete("extract", "p", "doc-1")  # estimate ~0.0042, real cost ~0.00035
+    p = make_provider(tmp_path, t, cap="10", run_cap="0.015")
+    p.complete("extract", "p", "doc-1")  # holds ~0.0125 (3 attempts x ~0.0042) while in flight, settles at ~0.00035
     for _ in range(20):
         try:
             p.complete("extract", "p", "doc-1")
@@ -345,7 +367,7 @@ def test_the_run_cap_stops_calls_while_the_global_cap_has_room(tmp_path):
     else:
         pytest.fail("the run cap never stopped the run")
     assert p.cap_reached is True
-    assert p.tracker.run_spent_usd <= D("0.005")
+    assert p.tracker.run_spent_usd <= D("0.015")
 
 
 def test_the_cap_is_checked_against_spend_from_earlier_runs(tmp_path):
@@ -362,6 +384,212 @@ def test_a_corrupt_ledger_blocks_the_call_before_it_is_sent(tmp_path):
     with pytest.raises(LLMProviderError, match="unreadable"):
         make_provider(tmp_path, t).complete("extract", "p", "doc-1")
     assert t.requests == []
+
+
+# --- reserve, send, settle ----------------------------------------------------------------------------------------------
+
+ACTUAL = (D(1000) * D("0.10") + D(500) * D("0.50")) / D(1_000_000)  # the default message() usage
+
+
+class Crash(BaseException):
+    """Stands in for the process dying mid-call: not an Exception, so neither the SDK nor the provider catches it."""
+
+
+def test_the_reservation_is_in_the_ledger_before_the_request_is_sent_and_covers_every_possible_attempt(tmp_path):
+    seen = []
+
+    def handler(request):
+        seen.append(ledger_total(tmp_path))
+        return message(json.dumps(INVOICE))
+
+    make_provider(tmp_path, handler, max_retries=2).complete("extract", "PROMPT", "doc-1")
+    # With the SDK allowed 2 retries, up to 3 requests can be billed, so 3 estimates are set aside up front.
+    assert seen == [hold(tmp_path, "PROMPT", max_retries=2)] and seen[0] == estimate("PROMPT") * 3
+
+
+def test_after_a_clean_first_attempt_the_reservation_is_replaced_by_the_observed_cost(tmp_path):
+    p = make_provider(tmp_path, Transport(message(json.dumps(INVOICE))))
+    p.complete("extract", "p", "doc-1")
+    assert ledger_total(tmp_path) == ACTUAL and p.tracker.reserved_usd == 0
+
+
+@pytest.mark.parametrize("failed_attempts", [1, 2])
+def test_retries_that_preceded_a_success_are_charged_at_the_estimate_on_top_of_the_observed_cost(tmp_path, failed_attempts):
+    # The earlier attempts' outcomes are unknown (a 429 or 5xx is usually not billed, a timeout may be), so each is
+    # counted at the pre-call estimate, which is never below what one attempt can cost.
+    t = Transport(*([api_error(500)] * failed_attempts), message(json.dumps(INVOICE)))
+    p = make_provider(tmp_path, t, max_retries=2)
+    p.complete("extract", "p", "doc-1")
+    assert len(t.requests) == failed_attempts + 1
+    assert ledger_total(tmp_path) == ACTUAL + estimate("p") * failed_attempts
+    assert p.tracker.run_spent_usd == ledger_total(tmp_path)
+
+
+@pytest.mark.parametrize(
+    "outcome",
+    [
+        pytest.param(httpx2.ReadTimeout("slow"), id="timeout"),
+        pytest.param(httpx2.ConnectError("down"), id="connection error"),
+        pytest.param(api_error(500), id="500"),
+        pytest.param(api_error(529, "overloaded_error"), id="529"),
+        pytest.param(api_error(429, "rate_limit_error"), id="429"),
+        pytest.param(api_error(401, "authentication_error"), id="401"),
+    ],
+)
+def test_a_call_whose_outcome_is_unknown_stays_counted_as_spent(tmp_path, outcome):
+    # A timeout after the server accepted the request can still be billed, and a failure response does not prove it
+    # was not; none of them leaves the ledger, so spend can only be over-counted, never missed.
+    t = Transport(outcome)
+    p = make_provider(tmp_path, t, max_retries=2)
+    with pytest.raises(LLMProviderError):
+        p.complete("extract", "p", "doc-1")
+    assert ledger_total(tmp_path) == hold(tmp_path, "p", max_retries=2)
+    assert p.tracker.reserved_usd == ledger_total(tmp_path) and p.tracker.run_spent_usd == ledger_total(tmp_path)
+
+
+def test_a_process_that_dies_mid_call_leaves_its_reservation_counted_for_the_next_run(tmp_path):
+    def handler(request):
+        raise Crash()
+
+    p = make_provider(tmp_path, handler, max_retries=0)
+    with pytest.raises(Crash):
+        p.complete("extract", "p", "doc-1")
+    assert ledger_total(tmp_path) == estimate("p")
+    # a later run sharing the ledger sees it: with a cap one estimate above the pending one, a second call no longer fits
+    cap = format(estimate("p") * 2 - D("0.000001"), "f")
+    with pytest.raises(SpendCapExceeded):
+        make_provider(tmp_path, Transport(message(json.dumps(INVOICE))), cap=cap, max_retries=0).complete("extract", "p", "doc-1")
+
+
+def test_unknown_outcomes_add_up_and_eventually_stop_the_run_at_the_cap(tmp_path):
+    cap = format(hold(tmp_path, "p", max_retries=0) * 2, "f")
+    t = Transport(httpx2.ConnectError("down"))
+    p = make_provider(tmp_path, t, cap=cap, max_retries=0)
+    for _ in range(2):
+        with pytest.raises(LLMProviderError, match="connect"):
+            p.complete("extract", "p", "doc-1")
+    with pytest.raises(SpendCapExceeded):
+        p.complete("extract", "p", "doc-1")
+    assert len(t.requests) == 2 and p.cap_reached is True
+
+
+def test_concurrent_calls_cannot_all_be_admitted_past_the_cap(tmp_path):
+    cap = format(estimate("p") * 2, "f")  # room for exactly two calls in flight
+    arrived, results = [], []
+    release = threading.Event()
+
+    def handler(request):
+        arrived.append(1)
+        release.wait(30)
+        return message(json.dumps(INVOICE))
+
+    def call():
+        provider = make_provider(tmp_path, handler, cap=cap, max_retries=0)
+        try:
+            provider.complete("extract", "p", "doc-1")
+            results.append("ok")
+        except SpendCapExceeded:
+            results.append("refused")
+
+    threads = [threading.Thread(target=call) for _ in range(6)]
+    for th in threads:
+        th.start()
+    deadline = time.monotonic() + 30
+    while len(arrived) + results.count("refused") < 6 and time.monotonic() < deadline:
+        threading.Event().wait(0.01)
+    threading.Event().wait(0.2)
+    in_flight = len(arrived)
+    release.set()
+    for th in threads:
+        th.join()
+    assert in_flight == 2
+    assert sorted(results) == ["ok", "ok", "refused", "refused", "refused", "refused"]
+    assert ledger_total(tmp_path) == ACTUAL * 2
+
+
+# --- ledger and cost failures after a billed call never escape the fallback paths --------------------------------------
+
+
+def _ledger_write_fails_once_the_request_is_in(tmp_path, monkeypatch, patched):
+    """A provider whose ledger can no longer be written by the time the (paid) response arrives."""
+
+    def handler(request):
+        patched.setattr(spend_module.os, "replace", _disk_full)
+        return message(json.dumps(INVOICE))
+
+    return make_provider(tmp_path, handler, max_retries=0)
+
+
+def _disk_full(*args, **kwargs):
+    raise OSError(28, "No space left on device")
+
+
+def test_a_ledger_write_failure_after_a_billed_call_is_a_provider_error_and_keeps_the_reservation(tmp_path, monkeypatch):
+    with monkeypatch.context() as patched:
+        p = _ledger_write_fails_once_the_request_is_in(tmp_path, monkeypatch, patched)
+        with pytest.raises(LLMProviderError, match="could not write spend ledger") as info:
+            p.complete("extract", "p", "doc-1")
+    assert isinstance(info.value, SpendLedgerError)
+    assert ledger_total(tmp_path) == estimate("p")  # the settle never landed, so the reservation still counts
+    assert p.tracker.run_spent_usd == estimate("p")
+
+
+def test_a_ledger_that_cannot_be_written_before_the_call_blocks_it(tmp_path, monkeypatch):
+    t = Transport(message(json.dumps(INVOICE)))
+    p = make_provider(tmp_path, t)
+    with monkeypatch.context() as patched:
+        patched.setattr(spend_module.os, "replace", _disk_full)
+        with pytest.raises(LLMProviderError, match="could not write spend ledger"):
+            p.complete("extract", "p", "doc-1")
+    assert t.requests == []
+
+
+def test_a_response_whose_cost_cannot_be_read_is_a_provider_error_and_keeps_the_reservation(tmp_path, monkeypatch):
+    def unreadable(model, usage):
+        raise SpendLedgerError("usage field input_tokens is not a valid token count: '7'")
+
+    monkeypatch.setattr(ap, "cost_usd", unreadable)
+    p = make_provider(tmp_path, Transport(message(json.dumps(INVOICE))), max_retries=0)
+    with pytest.raises(LLMProviderError, match="token count"):
+        p.complete("extract", "p", "doc-1")
+    assert ledger_total(tmp_path) == estimate("p")
+
+
+def test_a_programming_error_is_not_converted_into_a_provider_error(tmp_path, monkeypatch):
+    # complete() converts the failures it expects (API, ledger and pricing errors); it does not catch Exception, which
+    # would also hide bugs that callers deliberately leave uncaught.
+    def buggy(self, reservation, actual):
+        raise RuntimeError("a bug")
+
+    monkeypatch.setattr(SpendTracker, "settle", buggy)
+    with pytest.raises(RuntimeError, match="a bug"):
+        make_provider(tmp_path, Transport(message(json.dumps(INVOICE)))).complete("extract", "p", "doc-1")
+
+
+def test_extraction_routes_a_ledger_failure_after_a_billed_call_to_a_structured_provider_error(tmp_path, monkeypatch):
+    with monkeypatch.context() as patched:
+        p = _ledger_write_fails_once_the_request_is_in(tmp_path, monkeypatch, patched)
+        with pytest.raises(ExtractionError) as info:
+            extract_invoice(_reader_output(), p)
+    assert info.value.stage == "provider" and "spend ledger" in info.value.message
+
+
+def test_gl_coding_falls_back_to_the_keyword_coder_when_the_ledger_fails_after_a_billed_call(tmp_path, monkeypatch):
+    with monkeypatch.context() as patched:
+        p = _ledger_write_fails_once_the_request_is_in(tmp_path, monkeypatch, patched)
+        codes = code_lines(["Cloud hosting", "Foam board posters"], load_chart(), p, "doc-1", vendor_name="Acme")
+    assert [c.source for c in codes] == ["keyword_fallback"] * 2
+    assert all("spend ledger" in c.reason for c in codes)
+
+
+@pytest.mark.skipif(shutil.which("pdftotext") is None, reason="pdftotext not installed")
+def test_document_intake_sends_a_ledger_failure_to_human_review_with_zero_confidence(tmp_path, monkeypatch):
+    state = InvoiceState(invoice_id="x")
+    with monkeypatch.context() as patched:
+        p = _ledger_write_fails_once_the_request_is_in(tmp_path, monkeypatch, patched)
+        summary = fill_state_from_document(state, EN_001_PDF, p)
+    assert summary["extraction"] == "error" and summary["error"]["stage"] == "provider"
+    assert state.field_confidence.total_amount == 0.0 and state.extracted_fields.total_amount == 0.0
 
 
 # --- through the extraction and GL layers ------------------------------------------------------------------------------

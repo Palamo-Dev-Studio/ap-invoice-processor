@@ -121,10 +121,17 @@ TASK_SCHEMAS: Dict[str, Dict[str, Any]] = {"extract": EXTRACT_SCHEMA, "gl": GL_S
 class AnthropicProvider:
     """Answers `complete` with one Messages API call whose reply is constrained to the task's JSON schema.
 
-    Before each call the spend tracker is asked whether a conservative cost estimate still fits under the cap and
-    the run cap; after each call, including refused and truncated ones, the real cost from `response.usage` is
-    added to the ledger. `cap_reached` turns True once a call has been refused for spend, so a caller running a
-    batch can stop instead of letting every remaining document fail the same way.
+    Spend is admitted by reserving, not by checking: before a call is sent, the tracker reserves a conservative
+    estimate for every attempt the SDK may make (one estimate x (max_retries + 1)) under the ledger lock, so
+    concurrent callers cannot between them pass the cap or the run cap. After a response, including a refused or
+    truncated one, the reservation is settled to the real cost from `response.usage`, plus one estimate for each
+    retry that preceded it (those attempts' outcomes are unknown). When no response arrives (a timeout, a dropped
+    connection, an error status, a crash) nothing settles the reservation and it stays counted as spent, because
+    the request may have been billed anyway. `cap_reached` turns True once a call has been refused for spend, so a
+    caller running a batch can stop instead of letting every remaining document fail the same way.
+
+    Failures it expects surface as LLMProviderError: API errors, an unusable response, and ledger or pricing errors
+    (SpendLedgerError). Anything else is a bug and propagates.
     """
 
     def __init__(
@@ -155,23 +162,31 @@ class AnthropicProvider:
             self.max_tokens,
             extra_input_chars=len(SYSTEM_PROMPT) + len(json.dumps(schema)),
         )
+        # Every SDK retry is a separate billable request, so the reservation covers the first attempt plus all retries.
+        attempts = getattr(self.client, "max_retries", MAX_RETRIES) + 1
         try:
-            self.tracker.check(estimate)
+            reservation = self.tracker.reserve(estimate * attempts)
         except SpendCapExceeded:
             self.cap_reached = True
             raise
         try:
-            response = self.client.messages.create(
+            raw = self.client.messages.with_raw_response.create(
                 model=self.model,
                 max_tokens=self.max_tokens,
                 system=SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": prompt}],
                 output_config={"effort": self.effort, "format": {"type": "json_schema", "schema": schema}},
             )
+            response = raw.parse()
         except anthropic.APIError as exc:
+            # The outcome is unknown, so the reservation stays: see the class docstring.
             raise LLMProviderError(f"{doc_id}: {self._redact(_describe_api_error(exc))}") from None
 
-        self.tracker.record(cost_usd(self.model, response.usage))
+        # A cost that cannot be read raises SpendLedgerError (an LLMProviderError) and leaves the reservation in place.
+        observed = cost_usd(self.model, response.usage)
+        if raw.retries_taken:
+            observed += estimate * raw.retries_taken
+        self.tracker.settle(reservation, observed)
         return self._parse(response, doc_id)
 
     def _redact(self, text: str) -> str:
