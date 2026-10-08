@@ -10,18 +10,21 @@ it does not touch.
 PYTHONPATH=. .venv/bin/python eval/extraction_eval.py [--provider fixture] [--fixtures-dir DIR] [--out DIR]
 ```
 
-- `--provider` defaults to `AP_LLM_PROVIDER`, then `fixture`. Only `fixture` runs; any other provider is refused
-  with exit code 2 (see "Live provider" below).
+- `--provider` defaults to `AP_LLM_PROVIDER`, then `fixture`. `fixture` is the offline plumbing check described
+  below; `anthropic` is the separate live-model run (see "Live-model run" below). Any other name, a missing key
+  or cap, or a missing `--max-usd` with a live provider is refused with exit code 2.
+- `--max-usd N` caps the spend of one live run in USD. It is required with a live provider and refused with the
+  fixture provider.
 - `--fixtures-dir` is a directory holding `extract/<doc_id>.json` and `gl/<doc_id>.json` (default
   `tests/fixtures/llm`).
 - `--out` is where `extraction_eval.txt` and `extraction_eval.json` are written (default `eval/out/`, which is
   git-ignored: result numbers are never committed).
 
-Needs `pdftotext` and `tesseract` on PATH (the reader shells out to them). No network, no new dependencies.
+Needs `pdftotext` and `tesseract` on PATH (the reader shells out to them). A fixture run uses no network.
 
 ## What it does
 
-1. `read_document` reads each PDF or image to text (`pdftotext`, or Tesseract with `-l eng`).
+1. `read_document` reads each PDF or image to text (`pdftotext`, or Tesseract with `eng+spa`; see `AP_OCR_LANGS`).
 2. `extract_invoice` gets **only the `ReaderOutput`** and returns the extracted fields.
 3. `code_lines` gets only the extracted lines, the chart of accounts and the extracted vendor name.
 4. `eval/extraction_scoring.py` (the only module that opens ground truth and `gl_labels.json`) scores the result.
@@ -53,8 +56,9 @@ pipeline module names or opens ground truth or labels.
 
 Every report (stdout, the `.txt` file, and the first key of the `.json` file) starts with a banner: the run is
 offline and fixture-backed, the fixtures are hand-authored from reader text, no model ran, the numbers are not model
-accuracy, GL fixture and label agreement is not independent (same author), and Spanish scans and photos are OCR'd
-with `-l eng`. Do not quote numbers from a fixture run as AI accuracy anywhere.
+accuracy, GL fixture and label agreement is not independent (same author), and the fixtures were authored from reader
+text of Spanish scans and photos OCR'd with `-l eng` (the reader now defaults to `eng+spa`). Do not quote numbers from a
+fixture run as AI accuracy anywhere.
 
 ## Negative controls
 
@@ -67,11 +71,30 @@ must score below a quarter of the real extraction rate and below half of the rea
 different invoice, what remains is coincidence (shared currencies, quantities, chart accounts). A donor that is a
 variant of the same invoice would score high for a different reason, so the donor is chosen to avoid that.
 
-## Live provider (later)
+## Live-model run
 
-Once a provider is chosen: implement its `complete(task, prompt, doc_id)` in `ap_invoice_processor/llm/provider.py`
-(the `AnthropicProvider` stub raises today) and select it with `--provider` or `AP_LLM_PROVIDER`. A live run needs
-a disclosure banner written for a live run, set in `banner_for`, which refuses any provider other than the fixture
-one so a live result can never carry the plumbing-check wording. A live score would still be limited by the corpus:
-it is synthetic, the labels are one reader's reading of a five-account chart, and Spanish OCR needs `spa` language
-data to be meaningful.
+```
+PYTHONPATH=. .venv/bin/python eval/extraction_eval.py --provider anthropic --max-usd 1
+```
+
+This sends the corpus text to Claude Haiku 5.5 (needs `ANTHROPIC_API_KEY` and `AP_LLM_SPEND_CAP_USD`; see the
+README's "Provider" paragraph) and scores what comes back with the same scorer. It is a different report from the
+plumbing check:
+
+- Its banner, its first section heading ("LIVE MODEL ACCURACY") and its files differ. It writes
+  `extraction_eval_live.txt` and `extraction_eval_live.json`, never `extraction_eval.txt` or `.json`.
+- The integrity rules are unchanged: the model receives only reader text (the same prompts, isolation tests
+  included); ground truth and GL labels are opened only by the scorer after the run; GL results are counts, never
+  percentages; lines with no fitting account are reported as unscorable; a GL line the keyword coder handled is
+  counted and listed, not scored; and no LLM-versus-keyword figure is produced.
+- A section 5 reports the model calls made, the spend of this run, the ledger total and the failures by stage
+  (reader, provider, validation). A failed document stays in every denominator as a miss.
+- `--max-usd` caps this run; `AP_LLM_SPEND_CAP_USD` caps the running total across runs
+  (`eval/out/spend.json`, gitignored). If either would be passed, the run stops before sending the call that would
+  pass it, the document in progress is dropped whole, the report opens with "INCOMPLETE RUN" and lists the
+  documents not run, and the exit code is 3.
+- A live score is limited by the corpus: it is synthetic, the GL labels are one reader's reading of a five-account
+  chart (and a number of lines have no fitting account), and one run of one model is not a general accuracy claim.
+
+`tests/test_extraction_eval_live.py` runs this path against the real provider with the HTTP layer mocked; the one
+opt-in test that calls the API (`tests/test_llm_live.py`) runs only with `AP_LIVE=1`.

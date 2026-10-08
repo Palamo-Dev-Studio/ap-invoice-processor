@@ -14,12 +14,17 @@ client data are involved.
   `pdftoppm -r 150`, then rotation/perspective skew, blur, noise and contrast/lighting shifts via Pillow and numpy).
 - `ground_truth/<doc_id>.json` — one record per document (PDF or image): vendor, invoice number, ISO dates,
   currency, subtotal, tax, total, `total_display` (the total as printed), PO number or null, line items,
-  language, variant, layout. Image records also carry `"ocr_lang": "eng"`.
+  language, variant, layout. Image records also carry `"ocr_lang": "eng"`, the language the corpus was first
+  built and checked with; it is generation metadata and does not follow the reader's current default.
 
 ## OCR language caveat
 
-The installed Tesseract data holds only `eng` and `osd`. Spanish scan/photo variants are therefore OCR'd
-with `-l eng` and will show accent damage; do not quote a Spanish OCR accuracy figure from this corpus.
+The reader OCRs scans and photos with `eng+spa` by default (`AP_OCR_LANGS` or the `ocr_langs` argument
+change it; `chi_sim` and `chi_tra` are also accepted). With `-l eng` alone the Spanish variants showed accent
+damage; `eng+spa` recovers the accented words in the ground truth of the four Spanish scan/photo variants
+(a quick count, not an accuracy measurement). Do not quote a Spanish OCR accuracy figure from this corpus.
+The hand-authored extraction fixtures were written from the older `-l eng` reader text saved under
+`tests/fixtures/reader_text/`.
 
 ## Ground-truth fields vs `ap_invoice_processor/models.py`
 
@@ -50,7 +55,8 @@ and joins the outputs, because the default pass alone drops the tinted sidebar o
 - Vendor name: missing from the OCR text for `en-017-photo`, `es-002-scan` and `es-011-photo` (image
   degradation, not only accents), and for `es-003-photo` and `es-007-scan` only because accents are damaged
   (they match once accents are folded).
-- Spanish accents in general: OCR runs with `-l eng` (only `eng` and `osd` are installed).
+- Spanish accents in general: this list was measured with `-l eng`; with the current `eng+spa` default the
+  accents in the Spanish variants are largely recovered (see "OCR language caveat").
 - Invoice date in the printed form is not asserted for images; the ground truth stores it as ISO.
 
 ## GL labels
