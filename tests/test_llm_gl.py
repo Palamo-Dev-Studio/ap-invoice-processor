@@ -108,7 +108,8 @@ def test_missing_fixture_sends_every_line_to_the_keyword_coder(tmp_path):
     assert [c.source for c in codes] == ["keyword_fallback"] * 2
     assert all("provider failed" in c.reason and "no fixture" in c.reason for c in codes)
     rules = load_skill_rules()
-    vm = match_vendor("Acme Marketing Solutions", json.load(open(os.path.join(ROOT, "data", "vendor_master.json"))))
+    with open(os.path.join(ROOT, "data", "vendor_master.json"), encoding="utf-8") as f:
+        vm = match_vendor("Acme Marketing Solutions", json.load(f))
     assert [c.account for c in codes] == [keyword_code("Acme Marketing Solutions", l["description"], vm, rules).gl for l in LINES]
 
 
