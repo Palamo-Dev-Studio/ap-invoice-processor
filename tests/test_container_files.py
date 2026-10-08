@@ -162,3 +162,8 @@ def test_the_matcher_itself_can_fail():
     assert ignored([".env"], ".env") and not ignored([".env"], "web/server.py")
     assert not ignored(["tests/*", "!tests/fixtures", "tests/fixtures/*", "!tests/fixtures/llm"], "tests/fixtures/llm/a.json")
     assert ignored(["tests/*", "!tests/fixtures", "tests/fixtures/*", "!tests/fixtures/llm"], "tests/fixtures/ocr/a.png")
+
+
+def test_the_container_runs_tesseract_on_one_thread():
+    # OpenMP worker stacks and malloc arenas count against AP_SUBPROCESS_MAX_BYTES, so OCR runs single-threaded.
+    assert re.search(r"^ENV OMP_THREAD_LIMIT=1$", _read("Dockerfile"), re.M)

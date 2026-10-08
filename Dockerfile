@@ -36,6 +36,8 @@ ENV AP_SPEND_LEDGER_PATH=/tmp/ap-spend/spend.json
 # The dashboard refuses a PDF of more than this many pages at upload; the reader repeats the limit and rasterises no
 # further than this page, so a PDF that slips past the upload check still cannot run a long OCR job.
 ENV AP_MAX_PDF_PAGES=10
+# One OCR thread per tesseract run: no OpenMP worker stacks or arenas, so legitimate OCR stays well inside AP_SUBPROCESS_MAX_BYTES.
+ENV OMP_THREAD_LIMIT=1
 
 USER app
 
